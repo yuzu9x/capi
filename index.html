@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,52 +5,68 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Between</title>
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:#000; overflow:hidden; }
-  canvas { display:block; image-rendering:pixelated; }
-  #hud {
-    position:fixed; bottom:18px; left:50%;
-    transform:translateX(-50%);
-    color:rgba(180,210,255,0.35);
-    font:10px/1 'Courier New',monospace;
-    letter-spacing:0.22em; text-transform:uppercase;
-    pointer-events:none;
-  }
-  #title {
-    position:fixed; top:30px; left:50%;
-    transform:translateX(-50%);
-    color:rgba(180,210,255,0.6);
-    font:11px/1 'Courier New',monospace;
-    letter-spacing:0.45em; text-transform:uppercase;
-    pointer-events:none; transition:opacity 1.8s; white-space:nowrap;
-  }
-  #fade {
-    position:fixed; inset:0; background:#000;
-    opacity:0; pointer-events:none; z-index:20;
-  }
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; overflow:hidden; }
+canvas { display:block; image-rendering:pixelated; }
+
+#overlay {
+  position:fixed; inset:0;
+  pointer-events:none; z-index:5;
+}
+
+#title {
+  position:fixed; top:32px; left:50%;
+  transform:translateX(-50%);
+  color:rgba(180,210,255,.72);
+  font:11px/1 'Courier New',monospace;
+  letter-spacing:.5em; text-transform:uppercase;
+  pointer-events:none; transition:opacity 1.6s;
+  white-space:nowrap;
+}
+
+#hint {
+  position:fixed; bottom:22px; left:50%;
+  transform:translateX(-50%);
+  color:rgba(180,210,255,.28);
+  font:9px/1 'Courier New',monospace;
+  letter-spacing:.22em; text-transform:uppercase;
+  pointer-events:none;
+}
+
+#fade {
+  position:fixed; inset:0; background:#000;
+  opacity:0; pointer-events:none; z-index:20;
+  transition:opacity .7s;
+}
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
-<div id="hud">WASD / Arrow keys to walk · walk into a portal</div>
+<canvas id="overlay"></canvas>
 <div id="title"></div>
+<div id="hint">WASD · walk into a portal</div>
 <div id="fade"></div>
+
 <script>
 'use strict';
 
-// ── GL ──────────────────────────────────────────────────────────────
-const canvas = document.getElementById('c');
-const gl = canvas.getContext('webgl', { antialias: false });
-const fadeEl  = document.getElementById('fade');
+// ── GL SETUP ────────────────────────────────────────────────────────
+const canvas  = document.getElementById('c');
+const overlay = document.getElementById('overlay');
+const oc      = overlay.getContext('2d');
+const gl      = canvas.getContext('webgl', { antialias:false });
 const titleEl = document.getElementById('title');
+const fadeEl  = document.getElementById('fade');
 
 let W, H;
 function resize() {
-  W = Math.floor(window.innerWidth  / 2);
-  H = Math.floor(window.innerHeight / 2);
+  W = Math.floor(innerWidth / 2);
+  H = Math.floor(innerHeight / 2);
   canvas.width = W; canvas.height = H;
-  canvas.style.width  = window.innerWidth  + 'px';
-  canvas.style.height = window.innerHeight + 'px';
+  canvas.style.width  = innerWidth  + 'px';
+  canvas.style.height = innerHeight + 'px';
+  overlay.width  = innerWidth;
+  overlay.height = innerHeight;
   gl.viewport(0, 0, W, H);
 }
 window.addEventListener('resize', resize);
@@ -61,12 +76,13 @@ resize();
 function mkShader(t, src) {
   const s = gl.createShader(t);
   gl.shaderSource(s, src); gl.compileShader(s);
-  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(s), src);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
+    console.error(gl.getShaderInfoLog(s));
   return s;
 }
 function mkProg(vs, fs) {
   const p = gl.createProgram();
-  gl.attachShader(p, mkShader(gl.VERTEX_SHADER, vs));
+  gl.attachShader(p, mkShader(gl.VERTEX_SHADER,   vs));
   gl.attachShader(p, mkShader(gl.FRAGMENT_SHADER, fs));
   gl.linkProgram(p); return p;
 }
@@ -74,11 +90,11 @@ function u(p, n) { return gl.getUniformLocation(p, n); }
 
 // ── MATH ────────────────────────────────────────────────────────────
 function m4() { return new Float32Array(16); }
-function ident(m) { m.fill(0); m[0]=m[5]=m[10]=m[15]=1; return m; }
 function mul(a, b) {
   const r = m4();
-  for (let i=0;i<4;i++) for(let j=0;j<4;j++) {
-    let v=0; for(let k=0;k<4;k++) v+=a[i+k*4]*b[k+j*4]; r[i+j*4]=v;
+  for (let i=0;i<4;i++) for (let j=0;j<4;j++) {
+    let v=0; for (let k=0;k<4;k++) v += a[i+k*4]*b[k+j*4];
+    r[i+j*4] = v;
   }
   return r;
 }
@@ -87,7 +103,8 @@ function perspective(fov, asp, n, f) {
   m[0]=t/asp; m[5]=t; m[10]=(f+n)/(n-f); m[11]=-1; m[14]=2*f*n/(n-f);
   return m;
 }
-function lookAt(eye, at, up) {
+function lookAt(eye, at) {
+  const up=[0,1,0];
   const z=norm(sub3(eye,at)), x=norm(cross(up,z)), y=cross(z,x);
   const m=m4();
   m[0]=x[0]; m[4]=x[1]; m[8]=x[2];
@@ -99,88 +116,98 @@ function lookAt(eye, at, up) {
 function sub3(a,b){return[a[0]-b[0],a[1]-b[1],a[2]-b[2]];}
 function dot(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];}
 function cross(a,b){return[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];}
-function norm(v){const l=Math.hypot(...v)||1;return v.map(x=>x/l);}
+function norm(v){const l=Math.hypot(...v)||1; return v.map(x=>x/l);}
+function projectW(mvp, wx, wy, wz) {
+  return [
+    mvp[0]*wx + mvp[4]*wy + mvp[8]*wz  + mvp[12],
+    mvp[1]*wx + mvp[5]*wy + mvp[9]*wz  + mvp[13],
+    mvp[2]*wx + mvp[6]*wy + mvp[10]*wz + mvp[14],
+    mvp[3]*wx + mvp[7]*wy + mvp[11]*wz + mvp[15],
+  ];
+}
 
-// ── SCENE SHADER (Gouraud, vertex wobble) ───────────────────────────
+// ── ROOM SHADER ─────────────────────────────────────────────────────
+// Gouraud shading + PS1-style vertex jitter
 const ROOM_VS = `
 precision mediump float;
 attribute vec3 a_pos;
 attribute vec3 a_col;
 uniform mat4 u_mvp;
-uniform float u_wobble;
+uniform float u_jitter;
 varying vec3 v_col;
 void main(){
-  vec4 clip = u_mvp * vec4(a_pos,1.0);
-  float p = 48.0 * u_wobble;
-  clip.xy = floor(clip.xy*p+0.5)/p;
+  vec4 clip = u_mvp * vec4(a_pos, 1.0);
+  float g = 80.0 * u_jitter;
+  clip.xy = floor(clip.xy * g + 0.5) / g;
   gl_Position = clip;
   v_col = a_col;
 }`;
 const ROOM_FS = `
 precision mediump float;
 varying vec3 v_col;
-void main(){ gl_FragColor = vec4(v_col,1.0); }`;
+void main(){ gl_FragColor = vec4(v_col, 1.0); }`;
 const roomProg = mkProg(ROOM_VS, ROOM_FS);
 
-// ── SPRITE SHADER ───────────────────────────────────────────────────
+// ── SPRITE SHADER (billboard) ────────────────────────────────────────
 const SPR_VS = `
 precision mediump float;
 attribute vec2 a_pos;
 uniform vec2 u_ctr, u_sz;
 varying vec2 v_uv;
 void main(){
-  v_uv = a_pos*.5+.5;
-  gl_Position = vec4(a_pos*u_sz+u_ctr,0.,1.);
+  v_uv = a_pos * .5 + .5;
+  // u_sz.x is in NDC width, u_sz.y is in NDC height (already aspect-corrected)
+  gl_Position = vec4(u_ctr + a_pos * u_sz, 0., 1.);
 }`;
 const SPR_FS = `
 precision mediump float;
 varying vec2 v_uv;
 uniform sampler2D u_tex;
 void main(){
-  vec4 c=texture2D(u_tex,v_uv);
-  if(c.a<.05) discard;
-  gl_FragColor=c;
+  vec4 c = texture2D(u_tex, v_uv);
+  if (c.a < .05) discard;
+  gl_FragColor = c;
 }`;
 const sprProg = mkProg(SPR_VS, SPR_FS);
 
-// ── PORTAL SHADER ───────────────────────────────────────────────────
+// ── PORTAL SHADER ────────────────────────────────────────────────────
 const PRT_VS = `
 precision mediump float;
 attribute vec2 a_pos;
-uniform vec2 u_ctr,u_sz;
+uniform vec2 u_ctr, u_sz;
 varying vec2 v_uv;
-void main(){ v_uv=a_pos; gl_Position=vec4(a_pos*u_sz+u_ctr,0.,1.); }`;
+void main(){ v_uv = a_pos; gl_Position = vec4(a_pos * u_sz + u_ctr, 0., 1.); }`;
 const PRT_FS = `
 precision mediump float;
 varying vec2 v_uv;
 uniform vec3 u_col;
 uniform float u_pulse;
 void main(){
-  float d=length(v_uv);
-  if(d>1.0) discard;
-  float rim=smoothstep(1.0,.72,d);
-  float core=smoothstep(.72,.0,d)*.55;
-  float a=(rim*.9+core)*(0.65+u_pulse*.35);
-  gl_FragColor=vec4(u_col*a,a);
+  float d = length(v_uv);
+  if (d > 1.0) discard;
+  float rim  = smoothstep(1.0, .68, d);
+  float core = smoothstep(.68,  .0, d) * .5;
+  float a    = (rim * .95 + core) * (.6 + u_pulse * .4);
+  gl_FragColor = vec4(u_col * a, a);
 }`;
 const prtProg = mkProg(PRT_VS, PRT_FS);
 
-// shared quad buffer
+// shared quad
 const QB = gl.createBuffer();
 gl.bindBuffer(gl.ARRAY_BUFFER, QB);
-gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
-
-function bindQuadAttr(prog) {
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+function bindQuad(prog) {
   gl.bindBuffer(gl.ARRAY_BUFFER, QB);
-  const a = gl.getAttribLocation(prog,'a_pos');
+  const a = gl.getAttribLocation(prog, 'a_pos');
   gl.enableVertexAttribArray(a);
-  gl.vertexAttribPointer(a,2,gl.FLOAT,false,0,0);
+  gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
 }
 
-// ── BLOB CANVAS ─────────────────────────────────────────────────────
-const BC = 128, blobC = document.createElement('canvas');
+// ── BLOB TEXTURE (Canvas 2D → WebGL texture) ─────────────────────────
+const BC = 128;
+const blobC = document.createElement('canvas');
 blobC.width = blobC.height = BC;
-const b2d = blobC.getContext('2d');
+const b2 = blobC.getContext('2d');
 const blobTex = gl.createTexture();
 gl.bindTexture(gl.TEXTURE_2D, blobTex);
 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
@@ -188,392 +215,403 @@ gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-function paintBlob(phase, moveAmt, turnDir) {
-  // turnDir: -1 left, 0 forward, 1 right — shifts eyes and feet
-  b2d.clearRect(0,0,BC,BC);
-  const cx=BC/2, cy=BC*.54;
-  const rx=30, ry=26;
-  const bob = Math.sin(phase*Math.PI*2)*moveAmt*4;
-  const sqX = 1 + Math.cos(phase*Math.PI*2)*moveAmt*.06;
-  const sqY = 1 - Math.cos(phase*Math.PI*2)*moveAmt*.06;
+function paintBlob(phase, moveAmt, facingX) {
+  b2.clearRect(0, 0, BC, BC);
+  const cx = BC/2, cy = BC * .46;
+  const rx = 28, ry = 24;
+  const bob  = Math.sin(phase * Math.PI * 2) * moveAmt * 3.5;
+  const sqX  = 1 + Math.cos(phase * Math.PI * 2) * moveAmt * .06;
+  const sqY  = 1 - Math.cos(phase * Math.PI * 2) * moveAmt * .06;
 
-  // outer aura — drawn first so feet/body render on top
-  const aura = b2d.createRadialGradient(cx,cy+bob,0,cx,cy+bob,rx*1.7);
-  aura.addColorStop(0,'rgba(80,180,255,.18)');
-  aura.addColorStop(.5,'rgba(50,140,255,.08)');
-  aura.addColorStop(1,'rgba(20,80,255,0)');
-  b2d.fillStyle=aura;
-  b2d.beginPath(); b2d.ellipse(cx,cy+bob,rx*1.7,ry*sqY*1.7,0,0,Math.PI*2); b2d.fill();
+  // aura
+  const aura = b2.createRadialGradient(cx, cy+bob, 0, cx, cy+bob, rx*1.8);
+  aura.addColorStop(0, 'rgba(80,180,255,.15)');
+  aura.addColorStop(1, 'rgba(0,0,0,0)');
+  b2.fillStyle = aura;
+  b2.beginPath(); b2.ellipse(cx, cy+bob, rx*1.8, ry*1.8, 0, 0, Math.PI*2); b2.fill();
 
   // body
-  const bg = b2d.createRadialGradient(cx-rx*.22,cy+bob-ry*.2,2,cx,cy+bob,rx*1.1);
-  bg.addColorStop(0,'rgba(215,242,255,1)');
-  bg.addColorStop(.3,'rgba(110,195,255,1)');
-  bg.addColorStop(.7,'rgba(55,145,240,1)');
-  bg.addColorStop(1,'rgba(25,90,210,.88)');
-  b2d.fillStyle=bg;
-  b2d.beginPath(); b2d.ellipse(cx,cy+bob,rx*sqX,ry*sqY,0,0,Math.PI*2); b2d.fill();
+  const bg = b2.createRadialGradient(cx-rx*.2, cy+bob-ry*.2, 2, cx, cy+bob, rx*1.1);
+  bg.addColorStop(0,   'rgba(218,244,255,1)');
+  bg.addColorStop(.3,  'rgba(105,192,255,1)');
+  bg.addColorStop(.72, 'rgba(50,140,238,1)');
+  bg.addColorStop(1,   'rgba(22,85,205,.9)');
+  b2.fillStyle = bg;
+  b2.beginPath(); b2.ellipse(cx, cy+bob, rx*sqX, ry*sqY, 0, 0, Math.PI*2); b2.fill();
 
   // specular
-  const sp = b2d.createRadialGradient(cx-10,cy+bob-10,1,cx-10,cy+bob-10,15);
-  sp.addColorStop(0,'rgba(255,255,255,.82)');
-  sp.addColorStop(.55,'rgba(255,255,255,.15)');
-  sp.addColorStop(1,'rgba(255,255,255,0)');
-  b2d.fillStyle=sp;
-  b2d.beginPath(); b2d.ellipse(cx-10,cy+bob-10,13,9,-.35,0,Math.PI*2); b2d.fill();
+  const sp = b2.createRadialGradient(cx-9, cy+bob-9, 1, cx-9, cy+bob-9, 14);
+  sp.addColorStop(0,   'rgba(255,255,255,.85)');
+  sp.addColorStop(.6,  'rgba(255,255,255,.12)');
+  sp.addColorStop(1,   'rgba(255,255,255,0)');
+  b2.fillStyle = sp;
+  b2.beginPath(); b2.ellipse(cx-9, cy+bob-9, 12, 8, -.3, 0, Math.PI*2); b2.fill();
 
-  // shadow on ground below feet
-  b2d.save();
-  b2d.globalAlpha=.13;
-  const sg=b2d.createRadialGradient(cx,cy+ry*sqY+bob+30,0,cx,cy+ry*sqY+bob+30,rx*.9);
-  sg.addColorStop(0,'rgba(40,100,200,.6)');
-  sg.addColorStop(1,'rgba(40,100,200,0)');
-  b2d.fillStyle=sg;
-  b2d.beginPath(); b2d.ellipse(cx,cy+ry*sqY+bob+32,rx*.85,6,0,0,Math.PI*2); b2d.fill();
-  b2d.restore();
+  // eyes — shift left/right based on facing
+  const esh = facingX * 5;
+  const ey  = cy + bob - 5;
+  [cx-7+esh, cx+7+esh].forEach(ex => {
+    b2.fillStyle = 'rgba(6,18,60,.9)';
+    b2.beginPath(); b2.ellipse(ex, ey, 3.2, 3.2, 0, 0, Math.PI*2); b2.fill();
+    b2.fillStyle = 'rgba(255,255,255,.88)';
+    b2.beginPath(); b2.ellipse(ex-1, ey-1, 1.1, 1.1, 0, 0, Math.PI*2); b2.fill();
+  });
 
-  // feet — drawn AFTER body so they visually sit below and in front
-  const fShift = turnDir * 6;
+  // feet — below body, walk cycle
+  const footY = cy + ry * sqY + bob + 16;
+  const fsh   = facingX * 5;
   [
-    { ox: -11+fShift, ph: 0   },
-    { ox:  11+fShift, ph: .5  }
+    { ox: -10 + fsh, ph: 0   },
+    { ox:  10 + fsh, ph: .5  },
   ].forEach(f => {
-    const fp = ((phase + f.ph) % 1);
-    const lift = Math.sin(fp*Math.PI)*moveAmt*8;
-    const swingX = Math.sin(fp*Math.PI*2)*3*moveAmt;
-    const fx = cx + f.ox + swingX;
-    // feet sit below the body — cy + ry is bottom edge, add clear offset
-    const fy = cy + ry*sqY + bob + 18 - lift;
+    const fp   = (phase + f.ph) % 1;
+    const lift = Math.sin(fp * Math.PI) * moveAmt * 8;
+    const swX  = Math.sin(fp * Math.PI * 2) * moveAmt * 2.5;
+    const fx   = cx + f.ox + swX;
+    const fy   = footY - lift;
 
-    const fg = b2d.createRadialGradient(fx,fy,0,fx,fy,12);
-    fg.addColorStop(0,'rgba(130,210,255,.95)');
+    const fg = b2.createRadialGradient(fx, fy, 0, fx, fy, 11);
+    fg.addColorStop(0, 'rgba(130,210,255,.95)');
     fg.addColorStop(.5,'rgba(70,160,240,.5)');
-    fg.addColorStop(1,'rgba(40,120,220,0)');
-    b2d.fillStyle=fg;
-    b2d.beginPath(); b2d.ellipse(fx,fy,11,9,0,0,Math.PI*2); b2d.fill();
-    b2d.fillStyle='#9dd8ff';
-    b2d.beginPath(); b2d.ellipse(fx,fy,7,5,0,0,Math.PI*2); b2d.fill();
-  });
-
-  // eyes — shift with turn direction
-  const eyeShift = turnDir * 5;
-  const eyeY = cy + bob - 5;
-  [cx-8+eyeShift, cx+8+eyeShift].forEach(ex => {
-    b2d.fillStyle='rgba(8,22,70,.88)';
-    b2d.beginPath(); b2d.ellipse(ex,eyeY,3.5,3.5,0,0,Math.PI*2); b2d.fill();
-    b2d.fillStyle='rgba(255,255,255,.9)';
-    b2d.beginPath(); b2d.ellipse(ex-1,eyeY-1,1.2,1.2,0,0,Math.PI*2); b2d.fill();
+    fg.addColorStop(1, 'rgba(40,120,220,0)');
+    b2.fillStyle = fg;
+    b2.beginPath(); b2.ellipse(fx, fy, 10, 8, 0, 0, Math.PI*2); b2.fill();
+    b2.fillStyle = '#9dd8ff';
+    b2.beginPath(); b2.ellipse(fx, fy, 6.5, 5, 0, 0, Math.PI*2); b2.fill();
   });
 }
 
-function uploadBlob(phase, moveAmt, turnDir) {
-  paintBlob(phase, moveAmt, turnDir);
+function uploadBlob(phase, moveAmt, facingX) {
+  paintBlob(phase, moveAmt, facingX);
   gl.bindTexture(gl.TEXTURE_2D, blobTex);
-  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,blobC);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, blobC);
 }
 
-// ── ROOM GEOMETRY ───────────────────────────────────────────────────
-function buildRoom(floor, wall, ceil) {
-  const verts=[];
-  function quad(a,b,c,d,col){
-    [a,b,c,a,c,d].forEach(p=>verts.push(...p,...col));
+// ── ROOM GEOMETRY ────────────────────────────────────────────────────
+// Room dimensions — portals sit at z = PORTAL_Z on the back wall
+const RW = 9, RH = 5, RD = 12;
+const FLOOR_Y = -RH;
+const PORTAL_Z = -(RD - 0.1); // just in front of back wall
+
+function buildRoom(floorC, wallC, ceilC) {
+  const verts = [];
+  function quad(a, b, c, d, col) {
+    [a,b,c, a,c,d].forEach(p => verts.push(...p, ...col));
   }
-  const W=11, H=5, D=18;
-  quad([-W,-H,-D],[ W,-H,-D],[ W,-H, D],[-W,-H, D], floor);
-  quad([-W, H,-D],[-W, H, D],[ W, H, D],[ W, H,-D], ceil);
-  quad([-W,-H,-D],[ W,-H,-D],[ W, H,-D],[-W, H,-D], wall);
-  const wL=wall.map((v,i)=>i===0?v*1.12:v*.9);
-  quad([-W,-H,-D],[-W, H,-D],[-W, H, D],[-W,-H, D], wL);
-  const wR=wall.map(v=>v*.82);
-  quad([ W,-H,-D],[ W,-H, D],[ W, H, D],[ W, H,-D], wR);
-  return { data: new Float32Array(verts), count: verts.length/6 };
+  // floor — slightly brighter
+  const fl = floorC.map(v => Math.min(1, v * 1.15));
+  quad([-RW, FLOOR_Y,-RD],[ RW, FLOOR_Y,-RD],[ RW, FLOOR_Y, RD],[-RW, FLOOR_Y, RD], fl);
+
+  // ceiling — slightly dimmer
+  const ce = ceilC.map(v => v * .85);
+  quad([-RW, RH,-RD],[-RW, RH, RD],[ RW, RH, RD],[ RW, RH,-RD], ce);
+
+  // back wall — lightest (what you walk toward)
+  const bw = wallC.map(v => Math.min(1, v * 1.3));
+  quad([-RW, FLOOR_Y,-RD],[ RW, FLOOR_Y,-RD],[ RW, RH,-RD],[-RW, RH,-RD], bw);
+
+  // front wall (behind camera — rarely seen, keep dark)
+  const fw = wallC.map(v => v * .55);
+  quad([-RW, FLOOR_Y, RD],[-RW, RH, RD],[ RW, RH, RD],[ RW, FLOOR_Y, RD], fw);
+
+  // left wall
+  const lw = wallC.map((v,i) => i===0 ? Math.min(1,v*1.2) : v*.95);
+  quad([-RW, FLOOR_Y,-RD],[-RW, RH,-RD],[-RW, RH, RD],[-RW, FLOOR_Y, RD], lw);
+
+  // right wall — slightly darker for depth
+  const rw = wallC.map(v => v * .78);
+  quad([ RW, FLOOR_Y,-RD],[ RW, FLOOR_Y, RD],[ RW, RH, RD],[ RW, RH,-RD], rw);
+
+  return { data: new Float32Array(verts), count: verts.length / 6 };
 }
 
-// ── SCENE DEFINITIONS ───────────────────────────────────────────────
+// ── SCENE DEFINITIONS ────────────────────────────────────────────────
+// Portal collision radius — how close the player needs to get
+const PORTAL_R = 1.8;
+
 const SCENES = [
   {
-    title: 'The Threshold',
-    bg: [.07,.07,.13],
-    room: buildRoom([.13,.13,.21],[.09,.09,.17],[.17,.15,.25]),
+    title:   'THE THRESHOLD',
+    bg:      [.05, .07, .14],
+    room:    buildRoom([.13,.14,.24], [.09,.10,.18], [.16,.15,.26]),
     portals: [
-      { label:'Dissolution', col:[.55,.70,1.0], wx:-4 },
-      { label:'Ignition',    col:[1.0,.62,.45], wx: 4 },
+      { label:'ENTER VOID',    col:[.52,.68,1.0], wx:-4.5, next:1 },
+      { label:'TRACE SIGNAL',  col:[1.0,.60,.42], wx: 4.5, next:2 },
     ],
-    next:[1,2]
   },
   {
-    title: 'The Verdant Abyss',
-    bg: [.05,.11,.09],
-    room: buildRoom([.09,.17,.13],[.07,.13,.09],[.13,.21,.17]),
+    title:   'VERDANT ABYSS',
+    bg:      [.03, .10, .07],
+    room:    buildRoom([.09,.18,.13], [.07,.13,.09], [.12,.20,.16]),
     portals: [
-      { label:'Surrender', col:[.44,1.0,.71], wx:-4 },
-      { label:'Ascend',    col:[.78,.84,1.0], wx: 4 },
+      { label:'SURRENDER', col:[.42,.98,.68], wx:-4.5, next:2 },
+      { label:'ASCEND',    col:[.78,.84,1.0], wx: 4.5, next:0 },
     ],
-    next:[3,0]
   },
   {
-    title: 'The Burning Meridian',
-    bg: [.13,.06,.03],
-    room: buildRoom([.21,.11,.07],[.17,.08,.04],[.25,.15,.09]),
+    title:   'BURNING MERIDIAN',
+    bg:      [.14, .06, .03],
+    room:    buildRoom([.22,.12,.07], [.17,.08,.04], [.25,.14,.09]),
     portals: [
-      { label:'Remember', col:[1.0,.72,.28], wx:-4 },
-      { label:'Forget',   col:[.60,.40,1.0], wx: 4 },
+      { label:'REMEMBER', col:[1.0,.70,.26], wx:-4.5, next:0 },
+      { label:'FORGET',   col:[.58,.38,1.0], wx: 4.5, next:1 },
     ],
-    next:[0,3]
   },
   {
-    title: 'The Crimson Membrane',
-    bg: [.13,.05,.09],
-    room: buildRoom([.21,.07,.15],[.17,.05,.11],[.25,.09,.19]),
+    title:   'CRIMSON MEMBRANE',
+    bg:      [.12, .04, .09],
+    room:    buildRoom([.20,.07,.15], [.16,.05,.11], [.24,.09,.19]),
     portals: [
-      { label:'Become',   col:[1.0,.34,.54], wx:-4 },
-      { label:'Unbecome', col:[.34,.68,1.0], wx: 4 },
+      { label:'BECOME',   col:[1.0,.32,.52], wx:-4.5, next:1 },
+      { label:'UNBECOME', col:[.32,.66,1.0], wx: 4.5, next:2 },
     ],
-    next:[1,2]
-  }
+  },
 ];
 
-// Upload room buffers
+// Upload room VBOs
 SCENES.forEach(s => {
-  s.buf = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, s.buf);
+  s.vbo = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, s.vbo);
   gl.bufferData(gl.ARRAY_BUFFER, s.room.data, gl.STATIC_DRAW);
 });
 
-// ── GAME STATE ──────────────────────────────────────────────────────
+// ── GAME STATE ───────────────────────────────────────────────────────
 let sceneIdx = 0;
 let gTime    = 0;
 let trans    = false;
 
-const player = { x:0, z:2, moving:0, walkPhase:0, facingX:0, facingZ:-1 };
+const player = { x:0, z:1, facingX:0, moving:0, walkPhase:0 };
 const keys   = {};
-window.addEventListener('keydown', e=>{ keys[e.key]=true;  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault(); });
-window.addEventListener('keyup',   e=>{ keys[e.key]=false; });
+window.addEventListener('keydown', e => {
+  keys[e.key.toLowerCase()] = true;
+  if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(e.key.toLowerCase()))
+    e.preventDefault();
+});
+window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
 
-// ── PROJECTION — fixed camera from above-behind, follows player ──────
-const PROJ = perspective(Math.PI/3.5, 1, 0.1, 80);
-
-// Camera is fixed in angle — sits behind and above, always looking
-// at the player. It slides to follow but never rotates.
-const CAM_OFFSET = [0, 7, 9]; // fixed world-space offset from player
-
+// ── CAMERA ───────────────────────────────────────────────────────────
 function getVP() {
-  const eye = [
-    player.x + CAM_OFFSET[0],
-    CAM_OFFSET[1],
-    player.z + CAM_OFFSET[2],
-  ];
-  const at = [player.x, 0, player.z];
-  return mul(PROJ, lookAt(eye, at, [0,1,0]));
+  const proj = perspective(Math.PI / 3.4, W / H, 0.1, 80);
+  const eye  = [player.x, 7.5, player.z + 10];
+  const at   = [player.x, 0,   player.z];
+  return mul(proj, lookAt(eye, at));
 }
 
-function projectWorld(mvp, wx,wy,wz) {
-  const c=[
-    mvp[0]*wx+mvp[4]*wy+mvp[8]*wz +mvp[12],
-    mvp[1]*wx+mvp[5]*wy+mvp[9]*wz +mvp[13],
-    mvp[2]*wx+mvp[6]*wy+mvp[10]*wz+mvp[14],
-    mvp[3]*wx+mvp[7]*wy+mvp[11]*wz+mvp[15],
-  ];
-  return c;
-}
-
-// ── RENDER ROOM ─────────────────────────────────────────────────────
+// ── RENDER ROOM ──────────────────────────────────────────────────────
 function renderRoom(s, mvp) {
   gl.useProgram(roomProg);
-  gl.bindBuffer(gl.ARRAY_BUFFER, s.buf);
-  const aP=gl.getAttribLocation(roomProg,'a_pos');
-  const aC=gl.getAttribLocation(roomProg,'a_col');
+  gl.bindBuffer(gl.ARRAY_BUFFER, s.vbo);
+  const aP = gl.getAttribLocation(roomProg, 'a_pos');
+  const aC = gl.getAttribLocation(roomProg, 'a_col');
   gl.enableVertexAttribArray(aP); gl.enableVertexAttribArray(aC);
-  gl.vertexAttribPointer(aP,3,gl.FLOAT,false,24,0);
-  gl.vertexAttribPointer(aC,3,gl.FLOAT,false,24,12);
-  gl.uniformMatrix4fv(u(roomProg,'u_mvp'),false,mvp);
-  gl.uniform1f(u(roomProg,'u_wobble'),1.0);
-  gl.drawArrays(gl.TRIANGLES,0,s.room.count);
+  gl.vertexAttribPointer(aP, 3, gl.FLOAT, false, 24, 0);
+  gl.vertexAttribPointer(aC, 3, gl.FLOAT, false, 24, 12);
+  gl.uniformMatrix4fv(u(roomProg, 'u_mvp'), false, mvp);
+  gl.uniform1f(u(roomProg, 'u_jitter'), 1.0);
+  gl.drawArrays(gl.TRIANGLES, 0, s.room.count);
 }
 
-// ── RENDER SHADOW (flat ellipse on floor, rendered as 3D geometry) ───
+// ── RENDER SHADOW ────────────────────────────────────────────────────
+// Flat dark ellipse sitting on the floor directly under the blob
+const shadowBuf = gl.createBuffer();
+const N_SHADOW  = 28;
 function renderShadow(mvp) {
-  // Build a flat oval of triangles at y=floor level under the player
   const verts = [];
-  const N = 24;
-  const sx = 0.7, sz = 0.35; // oval shape
-  const fy = -4.85; // floor y
-  for(let i=0;i<N;i++){
-    const a0 = (i/N)*Math.PI*2, a1 = ((i+1)/N)*Math.PI*2;
-    verts.push(player.x, fy, player.z);
-    verts.push(player.x + Math.cos(a0)*sx, fy, player.z + Math.sin(a0)*sz);
-    verts.push(player.x + Math.cos(a1)*sx, fy, player.z + Math.sin(a1)*sz);
+  const fy = FLOOR_Y + 0.02; // just above floor to avoid z-fighting
+  for (let i = 0; i < N_SHADOW; i++) {
+    const a0 = (i   / N_SHADOW) * Math.PI * 2;
+    const a1 = ((i+1) / N_SHADOW) * Math.PI * 2;
+    verts.push(
+      player.x,                       fy, player.z,            .08,.16,.38,
+      player.x + Math.cos(a0) * .75,  fy, player.z + Math.sin(a0)*.38, .08,.16,.38,
+      player.x + Math.cos(a1) * .75,  fy, player.z + Math.sin(a1)*.38, .08,.16,.38,
+    );
   }
-  const col = [0.12, 0.25, 0.55]; // dark blue tint shadow
-  const data = [];
-  for(let i=0;i<verts.length;i+=3) data.push(verts[i],verts[i+1],verts[i+2],...col);
-
-  const buf = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.DYNAMIC_DRAW);
+  gl.bindBuffer(gl.ARRAY_BUFFER, shadowBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.DYNAMIC_DRAW);
 
   gl.useProgram(roomProg);
-  const aP=gl.getAttribLocation(roomProg,'a_pos');
-  const aC=gl.getAttribLocation(roomProg,'a_col');
+  const aP = gl.getAttribLocation(roomProg, 'a_pos');
+  const aC = gl.getAttribLocation(roomProg, 'a_col');
   gl.enableVertexAttribArray(aP); gl.enableVertexAttribArray(aC);
-  gl.vertexAttribPointer(aP,3,gl.FLOAT,false,24,0);
-  gl.vertexAttribPointer(aC,3,gl.FLOAT,false,24,12);
-  gl.uniformMatrix4fv(u(roomProg,'u_mvp'),false,mvp);
-  gl.uniform1f(u(roomProg,'u_wobble'),0.0); // no wobble on shadow
-  gl.enable(gl.BLEND);
-  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-  gl.drawArrays(gl.TRIANGLES, 0, N*3);
-  gl.disable(gl.BLEND);
-  gl.deleteBuffer(buf);
+  gl.vertexAttribPointer(aP, 3, gl.FLOAT, false, 24, 0);
+  gl.vertexAttribPointer(aC, 3, gl.FLOAT, false, 24, 12);
+  gl.uniformMatrix4fv(u(roomProg, 'u_mvp'), false, mvp);
+  gl.uniform1f(u(roomProg, 'u_jitter'), 0.0);
+  gl.drawArrays(gl.TRIANGLES, 0, N_SHADOW * 3);
 }
 
-// ── RENDER BLOB ─────────────────────────────────────────────────────
+// ── RENDER BLOB ──────────────────────────────────────────────────────
 function renderBlob(mvp) {
-  // facing direction: left=-1, right=1 based on world X movement
-  const td = player.facingX > 0.2 ? 1 : player.facingX < -0.2 ? -1 : 0;
-  uploadBlob(player.walkPhase, player.moving, td);
+  uploadBlob(player.walkPhase, player.moving, player.facingX);
 
-  const clip = projectWorld(mvp, player.x, -0.15, player.z);
+  // Project the player's feet position (y=FLOOR_Y) to get screen anchor
+  const clip = projectW(mvp, player.x, FLOOR_Y, player.z);
   if (clip[3] < 0.05) return;
-  const nx = clip[0]/clip[3], ny = clip[1]/clip[3];
-  const depth = Math.max(clip[3], 0.5);
-  const sx = 1.15/depth, sy = sx*(W/H);
+
+  const w = clip[3]; // perspective divide
+  // NDC position of feet
+  const nx = clip[0] / w;
+  const ny = clip[1] / w;
+
+  // Size: world-unit blob radius ~1.2, convert to NDC
+  // In NDC, 1 unit = half screen. We derive size from how big 1 world unit
+  // appears at this depth using the projection.
+  const proj = perspective(Math.PI / 3.4, W / H, 0.1, 80);
+  const scaleNDC = proj[5] / w; // proj[5] = f (y scale), divide by depth
+  const blobRadius = 1.2;
+  // sx in NDC x, sy in NDC y (aspect-corrected)
+  const sy = scaleNDC * blobRadius;
+  const sx = sy * (H / W); // correct for aspect
+
+  // Center billboard at feet, shift up by half blob height
+  const cy_ndc = ny + sy;
 
   gl.useProgram(sprProg);
-  bindQuadAttr(sprProg);
+  bindQuad(sprProg);
   gl.activeTexture(gl.TEXTURE0);
   gl.bindTexture(gl.TEXTURE_2D, blobTex);
-  gl.uniform1i(u(sprProg,'u_tex'),0);
-  gl.uniform2f(u(sprProg,'u_ctr'), nx, ny + sy*.45);
-  gl.uniform2f(u(sprProg,'u_sz'),  sx, sy);
+  gl.uniform1i(u(sprProg, 'u_tex'), 0);
+  gl.uniform2f(u(sprProg, 'u_ctr'), nx, cy_ndc);
+  gl.uniform2f(u(sprProg, 'u_sz'),  sx, sy);
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   gl.disable(gl.BLEND);
 }
 
-// ── RENDER PORTALS ──────────────────────────────────────────────────
+// ── RENDER PORTALS (WebGL oval) ──────────────────────────────────────
 function renderPortals(s, mvp) {
   gl.useProgram(prtProg);
-  bindQuadAttr(prtProg);
+  bindQuad(prtProg);
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
 
   s.portals.forEach(p => {
-    const clip = projectWorld(mvp, p.wx, 0.4, -7);
+    // Portal sits at mid-wall height, z = back wall
+    const clip = projectW(mvp, p.wx, 0.5, PORTAL_Z);
     if (clip[3] < 0.05) return;
-    const nx=clip[0]/clip[3], ny=clip[1]/clip[3];
-    const depth=Math.max(clip[3],.5);
-    // small oval: narrower x, taller y
-    const sx = 0.42/depth, sy = sx*(W/H)*1.9;
-    const pulse = Math.sin(gTime*2.4+p.wx)*.5+.5;
-    gl.uniform2f(u(prtProg,'u_ctr'),nx,ny);
-    gl.uniform2f(u(prtProg,'u_sz'),sx,sy);
-    gl.uniform3fv(u(prtProg,'u_col'),p.col);
-    gl.uniform1f(u(prtProg,'u_pulse'),pulse);
-    gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+    const nx = clip[0]/clip[3], ny = clip[1]/clip[3];
+    const depth = Math.max(clip[3], .5);
+    const sx = .38/depth, sy = sx*(W/H)*2.2; // tall oval
+    const pulse = Math.sin(gTime*2.2 + p.wx) * .5 + .5;
+    gl.uniform2f(u(prtProg, 'u_ctr'), nx, ny);
+    gl.uniform2f(u(prtProg, 'u_sz'),  sx, sy);
+    gl.uniform3fv(u(prtProg, 'u_col'), p.col);
+    gl.uniform1f(u(prtProg, 'u_pulse'), pulse);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   });
   gl.disable(gl.BLEND);
 }
 
-// ── PORTAL LABELS ───────────────────────────────────────────────────
-const lbC = document.createElement('canvas');
-lbC.style.cssText='position:fixed;top:0;left:0;pointer-events:none;z-index:5;';
-document.body.appendChild(lbC);
-const lx = lbC.getContext('2d');
+// ── OVERLAY LABELS + SCENE TITLE ─────────────────────────────────────
+function renderOverlay(s, mvp) {
+  oc.clearRect(0, 0, overlay.width, overlay.height);
 
-function renderLabels(s, mvp) {
-  lbC.width=window.innerWidth; lbC.height=window.innerHeight;
-  lx.clearRect(0,0,lbC.width,lbC.height);
   s.portals.forEach(p => {
-    const clip=projectWorld(mvp,p.wx,0.4,-7);
-    if(clip[3]<.05) return;
-    const sx=(clip[0]/clip[3]*.5+.5)*window.innerWidth;
-    const sy=(1-(clip[1]/clip[3]*.5+.5))*window.innerHeight;
-    const c=p.col;
-    lx.fillStyle=`rgba(${Math.round(c[0]*255)},${Math.round(c[1]*255)},${Math.round(c[2]*255)},.85)`;
-    lx.font='10px Courier New';
-    lx.textAlign='center';
-    lx.fillText(p.label.toUpperCase(), sx, sy-32);
-    const dx=player.x-p.wx, dz=player.z-(-7);
-    const dist=Math.hypot(dx,dz);
-    if(dist<2.6){
-      const a=Math.max(0,1-dist/2.6);
-      lx.fillStyle=`rgba(255,255,255,${a*.75})`;
-      lx.fillText('[ enter ]',sx,sy+38);
+    const clip = projectW(mvp, p.wx, 0.5, PORTAL_Z);
+    if (clip[3] < .05) return;
+    const sx = (clip[0]/clip[3] * .5 + .5) * overlay.width;
+    const sy = (1 - (clip[1]/clip[3] * .5 + .5)) * overlay.height;
+
+    // label above portal
+    const c = p.col;
+    oc.fillStyle = `rgba(${Math.round(c[0]*255)},${Math.round(c[1]*255)},${Math.round(c[2]*255)},.88)`;
+    oc.font = '10px Courier New';
+    oc.letterSpacing = '.15em';
+    oc.textAlign = 'center';
+
+    // subtle glitch jitter on label
+    const jx = (Math.random()-.5)*1.5, jy = (Math.random()-.5)*1.5;
+    oc.fillText(p.label, sx+jx, sy - 44 + jy);
+
+    // proximity prompt
+    const dist = Math.hypot(player.x - p.wx, player.z - PORTAL_Z);
+    if (dist < PORTAL_R * 1.5) {
+      const a = Math.max(0, 1 - dist / (PORTAL_R * 1.5));
+      oc.fillStyle = `rgba(255,255,255,${a * .7})`;
+      oc.font = '9px Courier New';
+      oc.fillText('[ enter ]', sx, sy + 50);
     }
   });
 }
 
-// ── TRANSITION ──────────────────────────────────────────────────────
+// ── TRANSITION ───────────────────────────────────────────────────────
 function goToScene(next) {
-  if(trans) return; trans=true;
-  fadeEl.style.transition='opacity .65s ease-in'; fadeEl.style.opacity='1';
-  setTimeout(()=>{
-    sceneIdx=next; player.x=0; player.z=2;
-    player.facingX=0; player.facingZ=-1;
-    titleEl.style.opacity='0';
-    setTimeout(()=>{
-      fadeEl.style.transition='opacity 1.1s ease-out'; fadeEl.style.opacity='0';
-      titleEl.textContent=SCENES[sceneIdx].title; titleEl.style.opacity='1';
-      setTimeout(()=>{ titleEl.style.opacity='0'; trans=false; },2600);
-    },320);
-  },720);
+  if (trans) return;
+  trans = true;
+  fadeEl.style.opacity = '1';
+  setTimeout(() => {
+    sceneIdx = next;
+    player.x = 0; player.z = 1; player.facingX = 0;
+    // show scene title
+    titleEl.style.opacity = '0';
+    setTimeout(() => {
+      titleEl.textContent = SCENES[sceneIdx].title;
+      fadeEl.style.opacity = '0';
+      titleEl.style.opacity = '1';
+      setTimeout(() => {
+        titleEl.style.opacity = '0';
+        trans = false;
+      }, 2400);
+    }, 400);
+  }, 750);
 }
 
-// ── INIT ────────────────────────────────────────────────────────────
-titleEl.textContent=SCENES[0].title; titleEl.style.opacity='1';
-setTimeout(()=>titleEl.style.opacity='0',2600);
+// ── INIT ─────────────────────────────────────────────────────────────
+titleEl.textContent = SCENES[0].title;
+titleEl.style.opacity = '1';
+setTimeout(() => titleEl.style.opacity = '0', 2400);
 
-// ── LOOP ────────────────────────────────────────────────────────────
-let last=0;
+// ── MAIN LOOP ────────────────────────────────────────────────────────
+let last = 0;
 function loop(ts) {
-  const dt=Math.min((ts-last)/1000,.05); last=ts; gTime+=dt;
+  const dt = Math.min((ts - last) / 1000, .05);
+  last = ts; gTime += dt;
 
-  // input — world-space movement, camera never rotates
-  const SPEED = 4.2;
+  // movement — pure world-space, camera never rotates
+  const SPEED = 4.5;
   let dx = 0, dz = 0;
-  if(!trans){
-    // W/S = forward/back in world Z (away from camera / toward camera)
-    if(keys['ArrowUp']   ||keys['w']||keys['W']) dz -= 1;
-    if(keys['ArrowDown'] ||keys['s']||keys['S']) dz += 1;
-    // A/D = left/right in world X
-    if(keys['ArrowLeft'] ||keys['a']||keys['A']) dx -= 1;
-    if(keys['ArrowRight']||keys['d']||keys['D']) dx += 1;
+  if (!trans) {
+    if (keys['w'] || keys['arrowup'])    dz -= 1;
+    if (keys['s'] || keys['arrowdown'])  dz += 1;
+    if (keys['a'] || keys['arrowleft'])  dx -= 1;
+    if (keys['d'] || keys['arrowright']) dx += 1;
   }
   const mv = dx !== 0 || dz !== 0;
-  if(mv){
+  if (mv) {
     const len = Math.hypot(dx, dz);
-    player.x += (dx/len)*SPEED*dt;
-    player.z += (dz/len)*SPEED*dt;
-    player.facingX = dx/len;
-    player.facingZ = dz/len;
+    player.x += (dx/len) * SPEED * dt;
+    player.z += (dz/len) * SPEED * dt;
+    player.facingX = dx / len;
   }
-  player.x = Math.max(-8.5, Math.min(8.5, player.x));
-  player.z = Math.max(-7,   Math.min(7,   player.z));
+  player.x = Math.max(-RW + .5, Math.min(RW - .5, player.x));
+  player.z = Math.max(-RD + .5, Math.min(RD - .5, player.z));
   player.moving = mv
-    ? Math.min(1, player.moving+dt*6)
-    : Math.max(0, player.moving-dt*9);
-  if(mv) player.walkPhase=(player.walkPhase+dt*3)%1;
+    ? Math.min(1, player.moving + dt * 6)
+    : Math.max(0, player.moving - dt * 9);
+  if (mv) player.walkPhase = (player.walkPhase + dt * 3) % 1;
 
-  // portal collision
-  if(!trans) SCENES[sceneIdx].portals.forEach((p,i)=>{
-    if(Math.hypot(player.x-p.wx, player.z-(-7))<1.15)
-      goToScene(SCENES[sceneIdx].next[i]);
-  });
+  // portal collision — check XZ distance to each portal
+  if (!trans) {
+    SCENES[sceneIdx].portals.forEach(p => {
+      const dist = Math.hypot(player.x - p.wx, player.z - PORTAL_Z);
+      if (dist < PORTAL_R) goToScene(p.next);
+    });
+  }
 
-  // render
-  const s=SCENES[sceneIdx];
-  gl.clearColor(s.bg[0],s.bg[1],s.bg[2],1);
-  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  // ── RENDER ──
+  const s = SCENES[sceneIdx];
+  gl.clearColor(s.bg[0], s.bg[1], s.bg[2], 1);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   gl.enable(gl.DEPTH_TEST);
 
-  const mvp=getVP();
+  const mvp = getVP();
   renderRoom(s, mvp);
-  renderPortals(s, mvp);
   renderShadow(mvp);
+  renderPortals(s, mvp);
   renderBlob(mvp);
-  renderLabels(s, mvp);
+  renderOverlay(s, mvp);
 
   requestAnimationFrame(loop);
 }
