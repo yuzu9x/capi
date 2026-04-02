@@ -1,5 +1,0 @@
-img {
-    image-rendering: pixelated;          /* Chrome, Safari, Edge */
-    image-rendering: crisp-edges;        /* Firefox fallback */
-    -ms-interpolation-mode: nearest-neighbor; /* Legacy IE, just in case */
-  }

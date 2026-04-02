@@ -2,729 +2,620 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CAPI</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
-html, body { width:100%; height:100%; background:#000; overflow:hidden; }
-#c { display:block; image-rendering:pixelated; }
+body { background:#000; overflow:hidden; }
+canvas { display:block; image-rendering:pixelated; }
 
-/* ── INTRO SCREEN ── */
-#intro {
+#overlay {
   position:fixed; inset:0;
-  background:#fff;
-  display:flex; align-items:center; justify-content:center;
-  z-index:100;
-  transition: opacity 1.2s ease;
-}
-#intro.fade { opacity:0; pointer-events:none; }
-#intro-canvas { display:block; }
-
-/* ── CRT ── */
-#crt {
-  position:fixed; inset:0; pointer-events:none; z-index:10;
-  background: repeating-linear-gradient(0deg,rgba(0,0,0,0.04) 0px,rgba(0,0,0,0.04) 1px,transparent 1px,transparent 3px);
-}
-#vignette {
-  position:fixed; inset:0; pointer-events:none; z-index:11;
-  background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.35) 100%);
+  pointer-events:none; z-index:5;
 }
 
-/* ── HUD ── */
-#hud {
-  position:fixed; inset:0; pointer-events:none; z-index:12;
-  font-family:'Georgia', serif;
-  color:#1a1a1a;
+#title {
+  position:fixed; top:32px; left:50%;
+  transform:translateX(-50%);
+  color:rgba(180,210,255,.72);
+  font:11px/1 'Courier New',monospace;
+  letter-spacing:.5em; text-transform:uppercase;
+  pointer-events:none; transition:opacity 1.6s;
+  white-space:nowrap;
 }
-#room-title {
-  position:absolute; top:20px; left:50%; transform:translateX(-50%);
-  font-size:11px; letter-spacing:0.35em; text-transform:uppercase;
-  opacity:0.5;
+
+#hint {
+  position:fixed; bottom:22px; left:50%;
+  transform:translateX(-50%);
+  color:rgba(180,210,255,.28);
+  font:9px/1 'Courier New',monospace;
+  letter-spacing:.22em; text-transform:uppercase;
+  pointer-events:none;
 }
-#depth-counter {
-  position:absolute; bottom:20px; right:22px;
-  font-size:10px; letter-spacing:0.15em; opacity:0.35;
+
+#fade {
+  position:fixed; inset:0; background:#000;
+  opacity:0; pointer-events:none; z-index:20;
+  transition:opacity .7s;
 }
-#choice-hint {
-  position:absolute; bottom:20px; left:50%; transform:translateX(-50%);
-  font-size:10px; letter-spacing:0.2em; opacity:0.45;
-  transition: opacity 0.4s;
-}
-/* door label overlays drawn on canvas, not DOM */
 </style>
 </head>
 <body>
-
-<!-- INTRO -->
-<div id="intro">
-  <canvas id="intro-canvas" width="320" height="320"></canvas>
-</div>
-
-<!-- GAME -->
 <canvas id="c"></canvas>
-<div id="crt"></div>
-<div id="vignette"></div>
-<div id="hud">
-  <div id="room-title">THE BIRTH</div>
-  <div id="depth-counter">ROOM 1</div>
-  <div id="choice-hint">WALK THROUGH A DOOR</div>
-</div>
+<canvas id="overlay"></canvas>
+<div id="title"></div>
+<div id="hint">WASD · walk into a portal</div>
+<div id="fade"></div>
 
 <script>
 'use strict';
 
-// ═══════════════════════════════════════════════════════
-//  INTRO: glowing orb animation on 2D canvas
-// ═══════════════════════════════════════════════════════
-(function runIntro() {
-  const ic = document.getElementById('intro-canvas');
-  const ix = ic.getContext('2d');
-  const S = 320;
-  let t = 0;
-  let introRunning = true;
-  let pulsed = false;
+// ── GL SETUP ────────────────────────────────────────────────────────
+const canvas  = document.getElementById('c');
+const overlay = document.getElementById('overlay');
+const oc      = overlay.getContext('2d');
+const gl      = canvas.getContext('webgl', { antialias:false });
+const titleEl = document.getElementById('title');
+const fadeEl  = document.getElementById('fade');
 
-  function drawOrb(t) {
-    ix.clearRect(0,0,S,S);
-    // white bg
-    ix.fillStyle = '#ffffff';
-    ix.fillRect(0,0,S,S);
+let W, H;
+function resize() {
+  W = Math.floor(innerWidth / 2);
+  H = Math.floor(innerHeight / 2);
+  canvas.width = W; canvas.height = H;
+  canvas.style.width  = innerWidth  + 'px';
+  canvas.style.height = innerHeight + 'px';
+  overlay.width  = innerWidth;
+  overlay.height = innerHeight;
+  gl.viewport(0, 0, W, H);
+}
+window.addEventListener('resize', resize);
+resize();
 
-    const cx = S/2, cy = S/2;
-    const breathe = 1 + 0.08 * Math.sin(t * 2.1);
-    const r = 18 * breathe;
+// ── SHADER UTILS ────────────────────────────────────────────────────
+function mkShader(t, src) {
+  const s = gl.createShader(t);
+  gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
+    console.error(gl.getShaderInfoLog(s));
+  return s;
+}
+function mkProg(vs, fs) {
+  const p = gl.createProgram();
+  gl.attachShader(p, mkShader(gl.VERTEX_SHADER,   vs));
+  gl.attachShader(p, mkShader(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p); return p;
+}
+function u(p, n) { return gl.getUniformLocation(p, n); }
 
-    // outer glow rings
-    for(let i = 5; i >= 1; i--) {
-      const gr = r * (1 + i * 0.7);
-      const alpha = 0.03 + 0.02 * Math.sin(t + i);
-      const g = ix.createRadialGradient(cx,cy,0, cx,cy,gr);
-      g.addColorStop(0, `rgba(255,220,40,${alpha * 3})`);
-      g.addColorStop(1, 'rgba(255,220,40,0)');
-      ix.fillStyle = g;
-      ix.beginPath();
-      ix.arc(cx, cy, gr, 0, Math.PI*2);
-      ix.fill();
-    }
-
-    // core gradient
-    const g2 = ix.createRadialGradient(cx-r*0.2, cy-r*0.2, r*0.05, cx, cy, r);
-    g2.addColorStop(0, '#ffffcc');
-    g2.addColorStop(0.4, '#ffe830');
-    g2.addColorStop(1, '#e8a000');
-    ix.fillStyle = g2;
-    ix.beginPath();
-    ix.arc(cx, cy, r, 0, Math.PI*2);
-    ix.fill();
-
-    // shimmer specular
-    ix.fillStyle = 'rgba(255,255,255,0.55)';
-    ix.beginPath();
-    ix.ellipse(cx - r*0.28, cy - r*0.32, r*0.28, r*0.18, -0.5, 0, Math.PI*2);
-    ix.fill();
-
-    // text fades in after 1.5s
-    if(t > 1.5) {
-      const alpha = Math.min((t - 1.5) / 1.2, 1);
-      ix.globalAlpha = alpha;
-      ix.fillStyle = '#333';
-      ix.font = '11px Georgia, serif';
-      ix.letterSpacing = '0.3em';
-      ix.textAlign = 'center';
-      ix.fillText('YOU ARE CAPI', cx, cy + r + 38);
-      ix.font = '9px Georgia, serif';
-      ix.fillStyle = '#888';
-      ix.fillText('PRESS ANY KEY TO BEGIN', cx, cy + r + 58);
-      ix.globalAlpha = 1;
-    }
+// ── MATH ────────────────────────────────────────────────────────────
+function m4() { return new Float32Array(16); }
+function mul(a, b) {
+  const r = m4();
+  for (let i=0;i<4;i++) for (let j=0;j<4;j++) {
+    let v=0; for (let k=0;k<4;k++) v += a[i+k*4]*b[k+j*4];
+    r[i+j*4] = v;
   }
+  return r;
+}
+function perspective(fov, asp, n, f) {
+  const m=m4(), t=1/Math.tan(fov*.5);
+  m[0]=t/asp; m[5]=t; m[10]=(f+n)/(n-f); m[11]=-1; m[14]=2*f*n/(n-f);
+  return m;
+}
+function lookAt(eye, at) {
+  const up=[0,1,0];
+  const z=norm(sub3(eye,at)), x=norm(cross(up,z)), y=cross(z,x);
+  const m=m4();
+  m[0]=x[0]; m[4]=x[1]; m[8]=x[2];
+  m[1]=y[0]; m[5]=y[1]; m[9]=y[2];
+  m[2]=z[0]; m[6]=z[1]; m[10]=z[2];
+  m[12]=-dot(x,eye); m[13]=-dot(y,eye); m[14]=-dot(z,eye); m[15]=1;
+  return m;
+}
+function sub3(a,b){return[a[0]-b[0],a[1]-b[1],a[2]-b[2]];}
+function dot(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];}
+function cross(a,b){return[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];}
+function norm(v){const l=Math.hypot(...v)||1; return v.map(x=>x/l);}
+function projectW(mvp, wx, wy, wz) {
+  return [
+    mvp[0]*wx + mvp[4]*wy + mvp[8]*wz  + mvp[12],
+    mvp[1]*wx + mvp[5]*wy + mvp[9]*wz  + mvp[13],
+    mvp[2]*wx + mvp[6]*wy + mvp[10]*wz + mvp[14],
+    mvp[3]*wx + mvp[7]*wy + mvp[11]*wz + mvp[15],
+  ];
+}
 
-  let lastI = 0;
-  function introLoop(now) {
-    const dt = Math.min((now - lastI)/1000, 0.05);
-    lastI = now;
-    t += dt;
-    drawOrb(t);
-    if(introRunning) requestAnimationFrame(introLoop);
+// ── ROOM SHADER ─────────────────────────────────────────────────────
+// Gouraud shading + PS1-style vertex jitter
+const ROOM_VS = `
+precision mediump float;
+attribute vec3 a_pos;
+attribute vec3 a_col;
+uniform mat4 u_mvp;
+uniform float u_jitter;
+varying vec3 v_col;
+void main(){
+  vec4 clip = u_mvp * vec4(a_pos, 1.0);
+  float g = 80.0 * u_jitter;
+  clip.xy = floor(clip.xy * g + 0.5) / g;
+  gl_Position = clip;
+  v_col = a_col;
+}`;
+const ROOM_FS = `
+precision mediump float;
+varying vec3 v_col;
+void main(){ gl_FragColor = vec4(v_col, 1.0); }`;
+const roomProg = mkProg(ROOM_VS, ROOM_FS);
+
+// ── SPRITE SHADER (billboard) ────────────────────────────────────────
+const SPR_VS = `
+precision mediump float;
+attribute vec2 a_pos;
+uniform vec2 u_ctr, u_sz;
+varying vec2 v_uv;
+void main(){
+  v_uv = a_pos * .5 + .5;
+  // u_sz.x is in NDC width, u_sz.y is in NDC height (already aspect-corrected)
+  gl_Position = vec4(u_ctr + a_pos * u_sz, 0., 1.);
+}`;
+const SPR_FS = `
+precision mediump float;
+varying vec2 v_uv;
+uniform sampler2D u_tex;
+void main(){
+  vec4 c = texture2D(u_tex, v_uv);
+  if (c.a < .05) discard;
+  gl_FragColor = c;
+}`;
+const sprProg = mkProg(SPR_VS, SPR_FS);
+
+// ── PORTAL SHADER ────────────────────────────────────────────────────
+const PRT_VS = `
+precision mediump float;
+attribute vec2 a_pos;
+uniform vec2 u_ctr, u_sz;
+varying vec2 v_uv;
+void main(){ v_uv = a_pos; gl_Position = vec4(a_pos * u_sz + u_ctr, 0., 1.); }`;
+const PRT_FS = `
+precision mediump float;
+varying vec2 v_uv;
+uniform vec3 u_col;
+uniform float u_pulse;
+void main(){
+  float d = length(v_uv);
+  if (d > 1.0) discard;
+  float rim  = smoothstep(1.0, .68, d);
+  float core = smoothstep(.68,  .0, d) * .5;
+  float a    = (rim * .95 + core) * (.6 + u_pulse * .4);
+  gl_FragColor = vec4(u_col * a, a);
+}`;
+const prtProg = mkProg(PRT_VS, PRT_FS);
+
+// shared quad
+const QB = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, QB);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+function bindQuad(prog) {
+  gl.bindBuffer(gl.ARRAY_BUFFER, QB);
+  const a = gl.getAttribLocation(prog, 'a_pos');
+  gl.enableVertexAttribArray(a);
+  gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
+}
+
+// ── BLOB TEXTURE (Canvas 2D → WebGL texture) ─────────────────────────
+const BC = 128;
+const blobC = document.createElement('canvas');
+blobC.width = blobC.height = BC;
+const b2 = blobC.getContext('2d');
+const blobTex = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, blobTex);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+function paintBlob(phase, moveAmt, facingX) {
+  b2.clearRect(0, 0, BC, BC);
+  const cx = BC/2, cy = BC * .46;
+  const rx = 28, ry = 24;
+  const bob  = Math.sin(phase * Math.PI * 2) * moveAmt * 3.5;
+  const sqX  = 1 + Math.cos(phase * Math.PI * 2) * moveAmt * .06;
+  const sqY  = 1 - Math.cos(phase * Math.PI * 2) * moveAmt * .06;
+
+  // aura
+  const aura = b2.createRadialGradient(cx, cy+bob, 0, cx, cy+bob, rx*1.8);
+  aura.addColorStop(0, 'rgba(80,180,255,.15)');
+  aura.addColorStop(1, 'rgba(0,0,0,0)');
+  b2.fillStyle = aura;
+  b2.beginPath(); b2.ellipse(cx, cy+bob, rx*1.8, ry*1.8, 0, 0, Math.PI*2); b2.fill();
+
+  // body
+  const bg = b2.createRadialGradient(cx-rx*.2, cy+bob-ry*.2, 2, cx, cy+bob, rx*1.1);
+  bg.addColorStop(0,   'rgba(218,244,255,1)');
+  bg.addColorStop(.3,  'rgba(105,192,255,1)');
+  bg.addColorStop(.72, 'rgba(50,140,238,1)');
+  bg.addColorStop(1,   'rgba(22,85,205,.9)');
+  b2.fillStyle = bg;
+  b2.beginPath(); b2.ellipse(cx, cy+bob, rx*sqX, ry*sqY, 0, 0, Math.PI*2); b2.fill();
+
+  // specular
+  const sp = b2.createRadialGradient(cx-9, cy+bob-9, 1, cx-9, cy+bob-9, 14);
+  sp.addColorStop(0,   'rgba(255,255,255,.85)');
+  sp.addColorStop(.6,  'rgba(255,255,255,.12)');
+  sp.addColorStop(1,   'rgba(255,255,255,0)');
+  b2.fillStyle = sp;
+  b2.beginPath(); b2.ellipse(cx-9, cy+bob-9, 12, 8, -.3, 0, Math.PI*2); b2.fill();
+
+  // eyes — shift left/right based on facing
+  const esh = facingX * 5;
+  const ey  = cy + bob - 5;
+  [cx-7+esh, cx+7+esh].forEach(ex => {
+    b2.fillStyle = 'rgba(6,18,60,.9)';
+    b2.beginPath(); b2.ellipse(ex, ey, 3.2, 3.2, 0, 0, Math.PI*2); b2.fill();
+    b2.fillStyle = 'rgba(255,255,255,.88)';
+    b2.beginPath(); b2.ellipse(ex-1, ey-1, 1.1, 1.1, 0, 0, Math.PI*2); b2.fill();
+  });
+
+  // feet — below body, walk cycle
+  const footY = cy + ry * sqY + bob + 16;
+  const fsh   = facingX * 5;
+  [
+    { ox: -10 + fsh, ph: 0   },
+    { ox:  10 + fsh, ph: .5  },
+  ].forEach(f => {
+    const fp   = (phase + f.ph) % 1;
+    const lift = Math.sin(fp * Math.PI) * moveAmt * 8;
+    const swX  = Math.sin(fp * Math.PI * 2) * moveAmt * 2.5;
+    const fx   = cx + f.ox + swX;
+    const fy   = footY - lift;
+
+    const fg = b2.createRadialGradient(fx, fy, 0, fx, fy, 11);
+    fg.addColorStop(0, 'rgba(130,210,255,.95)');
+    fg.addColorStop(.5,'rgba(70,160,240,.5)');
+    fg.addColorStop(1, 'rgba(40,120,220,0)');
+    b2.fillStyle = fg;
+    b2.beginPath(); b2.ellipse(fx, fy, 10, 8, 0, 0, Math.PI*2); b2.fill();
+    b2.fillStyle = '#9dd8ff';
+    b2.beginPath(); b2.ellipse(fx, fy, 6.5, 5, 0, 0, Math.PI*2); b2.fill();
+  });
+}
+
+function uploadBlob(phase, moveAmt, facingX) {
+  paintBlob(phase, moveAmt, facingX);
+  gl.bindTexture(gl.TEXTURE_2D, blobTex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, blobC);
+}
+
+// ── ROOM GEOMETRY ────────────────────────────────────────────────────
+// Room dimensions — portals sit at z = PORTAL_Z on the back wall
+const RW = 9, RH = 5, RD = 12;
+const FLOOR_Y = -RH;
+const PORTAL_Z = -(RD - 0.1); // just in front of back wall
+
+function buildRoom(floorC, wallC, ceilC) {
+  const verts = [];
+  function quad(a, b, c, d, col) {
+    [a,b,c, a,c,d].forEach(p => verts.push(...p, ...col));
   }
-  requestAnimationFrame(introLoop);
+  // floor — slightly brighter
+  const fl = floorC.map(v => Math.min(1, v * 1.15));
+  quad([-RW, FLOOR_Y,-RD],[ RW, FLOOR_Y,-RD],[ RW, FLOOR_Y, RD],[-RW, FLOOR_Y, RD], fl);
 
-  function dismissIntro() {
-    if(!introRunning) return;
-    introRunning = false;
-    const el = document.getElementById('intro');
-    el.classList.add('fade');
-    setTimeout(() => { el.style.display = 'none'; startGame(); }, 1200);
-    window.removeEventListener('keydown', dismissIntro);
-    window.removeEventListener('pointerdown', dismissIntro);
-  }
-  window.addEventListener('keydown', dismissIntro);
-  window.addEventListener('pointerdown', dismissIntro);
-})();
+  // ceiling — slightly dimmer
+  const ce = ceilC.map(v => v * .85);
+  quad([-RW, RH,-RD],[-RW, RH, RD],[ RW, RH, RD],[ RW, RH,-RD], ce);
 
+  // back wall — lightest (what you walk toward)
+  const bw = wallC.map(v => Math.min(1, v * 1.3));
+  quad([-RW, FLOOR_Y,-RD],[ RW, FLOOR_Y,-RD],[ RW, RH,-RD],[-RW, RH,-RD], bw);
 
-// ═══════════════════════════════════════════════════════
-//  DOOR BANKS — ominous, branching life decisions
-// ═══════════════════════════════════════════════════════
-const DOOR_PAIRS = [
-  // root
-  [
-    { label: "THE ROAD\nYOU CHOSE", sub: "AMBITION" },
-    { label: "THE ROAD\nTHAT CHOSE YOU", sub: "SURRENDER" }
-  ],
-  // depth 1 — ambition branch
-  [
-    { label: "TO LOVE\nFIERCELY", sub: "AND LOSE EVERYTHING" },
-    { label: "TO NEVER\nLOVE AT ALL", sub: "AND LOSE NOTHING" }
-  ],
-  [
-    { label: "TO BE\nREMEMBERED", sub: "BY THOSE YOU HARMED" },
-    { label: "TO BE\nFORGOTTEN", sub: "BY THOSE YOU SPARED" }
-  ],
-  // depth 2
-  [
-    { label: "SPEAK\nTRUTH", sub: "DESTROY WHAT REMAINS" },
-    { label: "STAY\nSILENT", sub: "WATCH IT ROT ANYWAY" }
-  ],
-  [
-    { label: "RETURN\nHOME", sub: "IT NO LONGER EXISTS" },
-    { label: "KEEP\nWALKING", sub: "YOU NEVER EXISTED" }
-  ],
-  [
-    { label: "HOLD ON\nTO THEM", sub: "FEEL THEM DISSOLVE" },
-    { label: "LET THEM\nGO FIRST", sub: "SPEND YEARS WONDERING" }
-  ],
-  [
-    { label: "BECOME\nYOUR FATHER", sub: "YOU SWORE YOU WOULDN'T" },
-    { label: "BECOME\nNOBODY", sub: "JUST TO BE SAFE" }
-  ],
-  // depth 3+
-  [
-    { label: "ASK FOR\nHELP", sub: "ADMIT YOU ARE DROWNING" },
-    { label: "PRETEND\nYOU'RE FINE", sub: "UNTIL YOU ARE NOT" }
-  ],
-  [
-    { label: "FORGIVE\nYOURSELF", sub: "YOU DON'T BELIEVE IT YET" },
-    { label: "CARRY IT\nFOREVER", sub: "YOU ALREADY HAVE" }
-  ],
-  [
-    { label: "CHOOSE\nFEAR", sub: "IT'S FAMILIAR" },
-    { label: "CHOOSE\nHOPE", sub: "IT HAS NEVER WORKED" }
-  ],
-  [
-    { label: "GIVE IT\nALL AWAY", sub: "WHAT ELSE IS THERE" },
-    { label: "KEEP IT\nALL INSIDE", sub: "WHAT ELSE IS THERE" }
-  ],
+  // front wall (behind camera — rarely seen, keep dark)
+  const fw = wallC.map(v => v * .55);
+  quad([-RW, FLOOR_Y, RD],[-RW, RH, RD],[ RW, RH, RD],[ RW, FLOOR_Y, RD], fw);
+
+  // left wall
+  const lw = wallC.map((v,i) => i===0 ? Math.min(1,v*1.2) : v*.95);
+  quad([-RW, FLOOR_Y,-RD],[-RW, RH,-RD],[-RW, RH, RD],[-RW, FLOOR_Y, RD], lw);
+
+  // right wall — slightly darker for depth
+  const rw = wallC.map(v => v * .78);
+  quad([ RW, FLOOR_Y,-RD],[ RW, FLOOR_Y, RD],[ RW, RH, RD],[ RW, RH,-RD], rw);
+
+  return { data: new Float32Array(verts), count: verts.length / 6 };
+}
+
+// ── SCENE DEFINITIONS ────────────────────────────────────────────────
+// Portal collision radius — how close the player needs to get
+const PORTAL_R = 1.8;
+
+const SCENES = [
+  {
+    title:   'THE THRESHOLD',
+    bg:      [.05, .07, .14],
+    room:    buildRoom([.13,.14,.24], [.09,.10,.18], [.16,.15,.26]),
+    portals: [
+      { label:'ENTER VOID',    col:[.52,.68,1.0], wx:-4.5, next:1 },
+      { label:'TRACE SIGNAL',  col:[1.0,.60,.42], wx: 4.5, next:2 },
+    ],
+  },
+  {
+    title:   'VERDANT ABYSS',
+    bg:      [.03, .10, .07],
+    room:    buildRoom([.09,.18,.13], [.07,.13,.09], [.12,.20,.16]),
+    portals: [
+      { label:'SURRENDER', col:[.42,.98,.68], wx:-4.5, next:2 },
+      { label:'ASCEND',    col:[.78,.84,1.0], wx: 4.5, next:0 },
+    ],
+  },
+  {
+    title:   'BURNING MERIDIAN',
+    bg:      [.14, .06, .03],
+    room:    buildRoom([.22,.12,.07], [.17,.08,.04], [.25,.14,.09]),
+    portals: [
+      { label:'REMEMBER', col:[1.0,.70,.26], wx:-4.5, next:0 },
+      { label:'FORGET',   col:[.58,.38,1.0], wx: 4.5, next:1 },
+    ],
+  },
+  {
+    title:   'CRIMSON MEMBRANE',
+    bg:      [.12, .04, .09],
+    room:    buildRoom([.20,.07,.15], [.16,.05,.11], [.24,.09,.19]),
+    portals: [
+      { label:'BECOME',   col:[1.0,.32,.52], wx:-4.5, next:1 },
+      { label:'UNBECOME', col:[.32,.66,1.0], wx: 4.5, next:2 },
+    ],
+  },
 ];
 
-function getDoorPair(depth, choiceHistory) {
-  // deterministic but path-influenced selection
-  const seed = depth * 7 + choiceHistory.reduce((a,v,i) => a + v * (i+1), 0);
-  // root always first pair
-  if(depth === 0) return DOOR_PAIRS[0];
-  const pool = DOOR_PAIRS.slice(1);
-  return pool[seed % pool.length];
+// Upload room VBOs
+SCENES.forEach(s => {
+  s.vbo = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, s.vbo);
+  gl.bufferData(gl.ARRAY_BUFFER, s.room.data, gl.STATIC_DRAW);
+});
+
+// ── GAME STATE ───────────────────────────────────────────────────────
+let sceneIdx = 0;
+let gTime    = 0;
+let trans    = false;
+
+const player = { x:0, z:1, facingX:0, moving:0, walkPhase:0 };
+const keys   = {};
+window.addEventListener('keydown', e => {
+  keys[e.key.toLowerCase()] = true;
+  if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(e.key.toLowerCase()))
+    e.preventDefault();
+});
+window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+// ── CAMERA ───────────────────────────────────────────────────────────
+function getVP() {
+  const proj = perspective(Math.PI / 3.4, W / H, 0.1, 80);
+  const eye  = [player.x, 7.5, player.z + 10];
+  const at   = [player.x, 0,   player.z];
+  return mul(proj, lookAt(eye, at));
 }
 
-// ═══════════════════════════════════════════════════════
-//  WEBGL SETUP
-// ═══════════════════════════════════════════════════════
-function startGame() {
-  const canvas = document.getElementById('c');
-  const W = canvas.width  = window.innerWidth;
-  const H = canvas.height = window.innerHeight;
+// ── RENDER ROOM ──────────────────────────────────────────────────────
+function renderRoom(s, mvp) {
+  gl.useProgram(roomProg);
+  gl.bindBuffer(gl.ARRAY_BUFFER, s.vbo);
+  const aP = gl.getAttribLocation(roomProg, 'a_pos');
+  const aC = gl.getAttribLocation(roomProg, 'a_col');
+  gl.enableVertexAttribArray(aP); gl.enableVertexAttribArray(aC);
+  gl.vertexAttribPointer(aP, 3, gl.FLOAT, false, 24, 0);
+  gl.vertexAttribPointer(aC, 3, gl.FLOAT, false, 24, 12);
+  gl.uniformMatrix4fv(u(roomProg, 'u_mvp'), false, mvp);
+  gl.uniform1f(u(roomProg, 'u_jitter'), 1.0);
+  gl.drawArrays(gl.TRIANGLES, 0, s.room.count);
+}
 
-  const gl = canvas.getContext('webgl', { antialias: true });
-  if(!gl) { alert('WebGL not supported'); return; }
-  gl.enable(gl.DEPTH_TEST);
+// ── RENDER SHADOW ────────────────────────────────────────────────────
+// Flat dark ellipse sitting on the floor directly under the blob
+const shadowBuf = gl.createBuffer();
+const N_SHADOW  = 28;
+function renderShadow(mvp) {
+  const verts = [];
+  const fy = FLOOR_Y + 0.02; // just above floor to avoid z-fighting
+  for (let i = 0; i < N_SHADOW; i++) {
+    const a0 = (i   / N_SHADOW) * Math.PI * 2;
+    const a1 = ((i+1) / N_SHADOW) * Math.PI * 2;
+    verts.push(
+      player.x,                       fy, player.z,            .08,.16,.38,
+      player.x + Math.cos(a0) * .75,  fy, player.z + Math.sin(a0)*.38, .08,.16,.38,
+      player.x + Math.cos(a1) * .75,  fy, player.z + Math.sin(a1)*.38, .08,.16,.38,
+    );
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER, shadowBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.DYNAMIC_DRAW);
+
+  gl.useProgram(roomProg);
+  const aP = gl.getAttribLocation(roomProg, 'a_pos');
+  const aC = gl.getAttribLocation(roomProg, 'a_col');
+  gl.enableVertexAttribArray(aP); gl.enableVertexAttribArray(aC);
+  gl.vertexAttribPointer(aP, 3, gl.FLOAT, false, 24, 0);
+  gl.vertexAttribPointer(aC, 3, gl.FLOAT, false, 24, 12);
+  gl.uniformMatrix4fv(u(roomProg, 'u_mvp'), false, mvp);
+  gl.uniform1f(u(roomProg, 'u_jitter'), 0.0);
+  gl.drawArrays(gl.TRIANGLES, 0, N_SHADOW * 3);
+}
+
+// ── RENDER BLOB ──────────────────────────────────────────────────────
+function renderBlob(mvp) {
+  uploadBlob(player.walkPhase, player.moving, player.facingX);
+
+  // Project the player's feet position (y=FLOOR_Y) to get screen anchor
+  const clip = projectW(mvp, player.x, FLOOR_Y, player.z);
+  if (clip[3] < 0.05) return;
+
+  const w = clip[3]; // perspective divide
+  // NDC position of feet
+  const nx = clip[0] / w;
+  const ny = clip[1] / w;
+
+  // Size: world-unit blob radius ~1.2, convert to NDC
+  // In NDC, 1 unit = half screen. We derive size from how big 1 world unit
+  // appears at this depth using the projection.
+  const proj = perspective(Math.PI / 3.4, W / H, 0.1, 80);
+  const scaleNDC = proj[5] / w; // proj[5] = f (y scale), divide by depth
+  const blobRadius = 1.2;
+  // sx in NDC x, sy in NDC y (aspect-corrected)
+  const sy = scaleNDC * blobRadius;
+  const sx = sy * (H / W); // correct for aspect
+
+  // Center billboard at feet, shift up by half blob height
+  const cy_ndc = ny + sy;
+
+  gl.useProgram(sprProg);
+  bindQuad(sprProg);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, blobTex);
+  gl.uniform1i(u(sprProg, 'u_tex'), 0);
+  gl.uniform2f(u(sprProg, 'u_ctr'), nx, cy_ndc);
+  gl.uniform2f(u(sprProg, 'u_sz'),  sx, sy);
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-
-  // ── Shaders ──────────────────────────────────────────
-  function mkShader(type, src) {
-    const s = gl.createShader(type);
-    gl.shaderSource(s, src);
-    gl.compileShader(s);
-    if(!gl.getShaderParameter(s, gl.COMPILE_STATUS))
-      console.error(gl.getShaderInfoLog(s));
-    return s;
-  }
-  function mkProg(vs, fs) {
-    const p = gl.createProgram();
-    gl.attachShader(p, mkShader(gl.VERTEX_SHADER, vs));
-    gl.attachShader(p, mkShader(gl.FRAGMENT_SHADER, fs));
-    gl.linkProgram(p);
-    return p;
-  }
-
-  const roomVS = `
-    attribute vec3 aPos;
-    attribute vec3 aNorm;
-    uniform mat4 uMVP;
-    varying vec3 vNorm;
-    varying vec3 vPos;
-    void main(){
-      gl_Position = uMVP * vec4(aPos,1.0);
-      vNorm = aNorm;
-      vPos  = aPos;
-    }
-  `;
-  const roomFS = `
-    precision mediump float;
-    varying vec3 vNorm;
-    varying vec3 vPos;
-    uniform vec3  uColor;
-    uniform float uDarkness;  // 0=bright 1=dark
-    uniform float uFogStart;
-    uniform float uFogEnd;
-    void main(){
-      float diff = 0.62 + 0.38 * max(dot(normalize(vNorm), normalize(vec3(0.3,1.0,0.4))), 0.0);
-      // ambient occlusion hint: floor edges slightly darker
-      float ao = 1.0 - 0.12 * max(0.0, 1.0 - abs(vPos.y) * 2.0);
-      vec3 col = uColor * diff * ao;
-      // depth fog toward walls
-      float d = length(vPos.xz) / 22.0;
-      float fog = smoothstep(0.4, 1.0, d) * 0.25 * uDarkness;
-      col = mix(col, uColor * 0.6, fog);
-      gl_FragColor = vec4(col, 1.0);
-    }
-  `;
-
-  // Coin avatar shader — billboard
-  const coinVS = `
-    attribute vec2 aPos;
-    uniform mat4  uMVP;
-    uniform mat4  uView;
-    uniform vec3  uWorld;
-    uniform float uRadius;
-    varying vec2  vUV;
-    void main(){
-      vec3 right = normalize(vec3(uView[0][0], uView[1][0], uView[2][0]));
-      vec3 up    = vec3(0.0, 1.0, 0.0);
-      vec3 pos   = uWorld + right*aPos.x*uRadius + up*aPos.y*uRadius;
-      gl_Position = uMVP * vec4(pos,1.0);
-      vUV = aPos * 0.5 + 0.5;
-    }
-  `;
-  const coinFS = `
-    precision mediump float;
-    varying vec2 vUV;
-    uniform float uTime;
-    void main(){
-      vec2 uv = vUV * 2.0 - 1.0;
-      float d = length(uv);
-      if(d > 1.0) discard;
-      // coin body gradient
-      float rim = smoothstep(0.85, 1.0, d);
-      float highlight = smoothstep(0.0, 0.5, 1.0 - length(uv - vec2(-0.25, 0.30)));
-      vec3 gold  = vec3(1.0, 0.80, 0.15);
-      vec3 dark  = vec3(0.65, 0.42, 0.04);
-      vec3 shineCol = vec3(1.0, 0.97, 0.70);
-      vec3 col = mix(dark, gold, 1.0 - d * 0.7);
-      col = mix(col, shineCol, highlight * 0.55);
-      col = mix(col, dark, rim * 0.6);
-      // subtle spin shimmer
-      float shimmer = 0.5 + 0.5 * sin(uTime * 2.2 + uv.x * 6.0);
-      col += shimmer * 0.04 * (1.0 - d);
-      // glow edge
-      float glow = smoothstep(1.0, 0.75, d) * 0.18;
-      col += vec3(1.0, 0.9, 0.3) * glow;
-      float alpha = smoothstep(1.0, 0.92, d);
-      gl_FragColor = vec4(col, alpha);
-    }
-  `;
-
-  // Door frame / arch overlay — drawn as quads in world space
-  const doorVS = `
-    attribute vec3 aPos;
-    uniform mat4 uMVP;
-    void main(){ gl_Position = uMVP * vec4(aPos,1.0); }
-  `;
-  const doorFS = `
-    precision mediump float;
-    uniform vec4 uCol;
-    void main(){ gl_FragColor = uCol; }
-  `;
-
-  const roomProg = mkProg(roomVS, roomFS);
-  const coinProg = mkProg(coinVS, coinFS);
-  const doorProg = mkProg(doorVS, doorFS);
-
-  // ── Math ──────────────────────────────────────────────
-  function m4() { return new Float32Array(16); }
-  function identity(m){ m.fill(0); m[0]=m[5]=m[10]=m[15]=1; return m; }
-  function perspective(m,fov,asp,n,f){
-    const t=1/Math.tan(fov/2); m.fill(0);
-    m[0]=t/asp; m[5]=t; m[10]=(f+n)/(n-f); m[11]=-1; m[14]=(2*f*n)/(n-f); return m;
-  }
-  function lookAt(m,ex,ey,ez,tx,ty,tz){
-    let fx=tx-ex,fy=ty-ey,fz=tz-ez,fl=Math.sqrt(fx*fx+fy*fy+fz*fz);
-    fx/=fl;fy/=fl;fz/=fl;
-    let rx=fy*0-fz*1,ry=fz*0-fx*0,rz=fx*1-fy*0,rl=Math.sqrt(rx*rx+ry*ry+rz*rz);
-    rx/=rl;ry/=rl;rz/=rl;
-    const ux=ry*fz-rz*fy,uy=rz*fx-rx*fz,uz=rx*fy-ry*fx;
-    m[0]=rx;m[1]=ux;m[2]=-fx;m[3]=0;
-    m[4]=ry;m[5]=uy;m[6]=-fy;m[7]=0;
-    m[8]=rz;m[9]=uz;m[10]=-fz;m[11]=0;
-    m[12]=-(rx*ex+ry*ey+rz*ez);
-    m[13]=-(ux*ex+uy*ey+uz*ez);
-    m[14]= (fx*ex+fy*ey+fz*ez);
-    m[15]=1; return m;
-  }
-  function mul(o,a,b){
-    for(let i=0;i<4;i++) for(let j=0;j<4;j++){
-      o[j*4+i]=0; for(let k=0;k<4;k++) o[j*4+i]+=a[k*4+i]*b[j*4+k];
-    } return o;
-  }
-
-  // ── Buffer helpers ─────────────────────────────────────
-  function vbuf(data){
-    const b=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,b);
-    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data),gl.STATIC_DRAW); return b;
-  }
-  function ibuf(data){
-    const b=gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,b);
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(data),gl.STATIC_DRAW); return b;
-  }
-  function attrib(prog, name, buf, size, stride, off){
-    gl.bindBuffer(gl.ARRAY_BUFFER,buf);
-    const loc=gl.getAttribLocation(prog,name);
-    if(loc<0) return;
-    gl.enableVertexAttribArray(loc);
-    gl.vertexAttribPointer(loc,size,gl.FLOAT,false,stride,off);
-  }
-
-  // ── Room geometry ──────────────────────────────────────
-  // Room is 22x22x6 (wide, depth, height)
-  // Two doors on north wall, one on south (exit back, not used actively)
-  const RW=11, RD=11, RH=5.5;
-
-  function buildRoom() {
-    // pos(3) norm(3) — stride 24
-    const S = 24;
-    const verts = [];
-    const idx   = [];
-    let vi = 0;
-
-    function quad(pts, nx,ny,nz){
-      const base = vi;
-      for(const p of pts){ verts.push(...p, nx,ny,nz); vi++; }
-      idx.push(base,base+1,base+2, base,base+2,base+3);
-    }
-
-    // Floor
-    quad([[-RW,0,-RD],[RW,0,-RD],[RW,0,RD],[-RW,0,RD]], 0,1,0);
-    // Ceiling
-    quad([[-RW,RH,-RD],[RW,RH,-RD],[RW,RH,RD],[-RW,RH,RD]], 0,-1,0);
-    // South wall (behind player start)
-    quad([[-RW,0,RD],[RW,0,RD],[RW,RH,RD],[-RW,RH,RD]], 0,0,-1);
-    // East
-    quad([[RW,0,-RD],[RW,0,RD],[RW,RH,RD],[RW,RH,-RD]], -1,0,0);
-    // West
-    quad([[-RW,0,RD],[-RW,0,-RD],[-RW,RH,-RD],[-RW,RH,RD]], 1,0,0);
-
-    // North wall — two door cutouts, so we build it in pieces
-    // Full north: z=-RD, x: -RW to RW, y: 0 to RH
-    // Door A: x -7 to -2, y 0 to 3.8
-    // Door B: x  2 to  7, y 0 to 3.8
-    const DH=3.8, DA1=-7, DA2=-2, DB1=2, DB2=7;
-    // Left strip
-    quad([[-RW,0,-RD],[DA1,0,-RD],[DA1,RH,-RD],[-RW,RH,-RD]], 0,0,1);
-    // Middle strip (between doors)
-    quad([[DA2,0,-RD],[DB1,0,-RD],[DB1,RH,-RD],[DA2,RH,-RD]], 0,0,1);
-    // Right strip
-    quad([[DB2,0,-RD],[RW,0,-RD],[RW,RH,-RD],[DB2,RH,-RD]], 0,0,1);
-    // Above door A
-    quad([[DA1,DH,-RD],[DA2,DH,-RD],[DA2,RH,-RD],[DA1,RH,-RD]], 0,0,1);
-    // Above door B
-    quad([[DB1,DH,-RD],[DB2,DH,-RD],[DB2,RH,-RD],[DB1,RH,-RD]], 0,0,1);
-
-    return {
-      vb: vbuf(verts),
-      ib: ibuf(idx),
-      count: idx.length,
-      // door world positions (center-bottom of each doorway, z=-RD+0.1)
-      doorA: { x: (DA1+DA2)/2, z: -RD },
-      doorB: { x: (DB1+DB2)/2, z: -RD },
-    };
-  }
-
-  const roomGeom = buildRoom();
-
-  // Door frame quads (thin dark border)
-  function buildDoorFrame(cx, z) {
-    const DH=3.8, hw=2.5;
-    // left pillar, right pillar, top bar
-    const verts = [
-      // left pillar face
-      cx-hw,0,z+0.02,  cx-hw+0.15,0,z+0.02,  cx-hw+0.15,DH,z+0.02,  cx-hw,DH,z+0.02,
-      // right pillar face
-      cx+hw-0.15,0,z+0.02, cx+hw,0,z+0.02, cx+hw,DH,z+0.02, cx+hw-0.15,DH,z+0.02,
-      // top bar
-      cx-hw,DH-0.15,z+0.02, cx+hw,DH-0.15,z+0.02, cx+hw,DH,z+0.02, cx-hw,DH,z+0.02,
-    ];
-    const idx = [0,1,2,0,2,3, 4,5,6,4,6,7, 8,9,10,8,10,11];
-    return { vb: vbuf(verts), ib: ibuf(idx), count: idx.length };
-  }
-
-  // ── Coin billboard ─────────────────────────────────────
-  const coinVB = vbuf([-1,0, 1,0, 1,2, -1,2]);
-  const coinIB = ibuf([0,1,2, 0,2,3]);
-
-  // ── 2D text overlay on hidden canvas → texture ─────────
-  function makeTextTex(lines, subtext, w=256, h=128) {
-    const tc = document.createElement('canvas');
-    tc.width=w; tc.height=h;
-    const tx=tc.getContext('2d');
-    tx.clearRect(0,0,w,h);
-    tx.fillStyle='rgba(0,0,0,0)';
-    tx.fillRect(0,0,w,h);
-
-    tx.textAlign='center';
-    tx.fillStyle='rgba(15,15,15,0.92)';
-
-    const lns = lines.split('\n');
-    tx.font = `bold ${lns.length > 1 ? 16 : 18}px Georgia, serif`;
-    tx.letterSpacing = '0.15em';
-    lns.forEach((ln, i) => {
-      tx.fillText(ln, w/2, h/2 - (lns.length-1)*10 + i*20 - 12);
-    });
-
-    tx.font = '10px Georgia, serif';
-    tx.fillStyle = 'rgba(60,60,60,0.75)';
-    tx.letterSpacing = '0.2em';
-    tx.fillText(subtext, w/2, h/2 + 26);
-
-    const tex = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,tc);
-    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
-    return tex;
-  }
-
-  // Fullscreen text quad shader (for door labels)
-  const texVS = `
-    attribute vec3 aPos;
-    attribute vec2 aUV;
-    uniform mat4 uMVP;
-    varying vec2 vUV;
-    void main(){ gl_Position = uMVP * vec4(aPos,1.0); vUV=aUV; }
-  `;
-  const texFS = `
-    precision mediump float;
-    varying vec2 vUV;
-    uniform sampler2D uTex;
-    uniform float uAlpha;
-    void main(){
-      vec4 c = texture2D(uTex, vUV);
-      gl_FragColor = vec4(c.rgb, c.a * uAlpha);
-    }
-  `;
-  const texProg = mkProg(texVS, texFS);
-
-  function makeSignQuad(cx, yTop, z, w, h) {
-    // a quad in world space, slightly in front of wall
-    const verts = [
-      cx-w/2, yTop,   z+0.05, 0,0,
-      cx+w/2, yTop,   z+0.05, 1,0,
-      cx+w/2, yTop-h, z+0.05, 1,1,
-      cx-w/2, yTop-h, z+0.05, 0,1,
-    ];
-    return { vb: vbuf(verts), ib: ibuf([0,1,2,0,2,3]), count:6 };
-  }
-
-  // ── Game state ─────────────────────────────────────────
-  const player = { x:0, y:0, z:5 };
-  const SPEED  = 0.07;
-  const keys   = {};
-  window.addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; });
-  window.addEventListener('keyup',   e => { keys[e.key.toLowerCase()] = false; });
-
-  let depth = 0;
-  let choiceHistory = [];
-  let transitioning = false;
-  let transitionAlpha = 0; // 0=clear 1=white
-  let transitionDir = 0;   // 1=fade to white, -1=fade to game
-
-  // Current room door pair
-  let currentPair = getDoorPair(0, []);
-  let doorFrameA = buildDoorFrame(-4.5, -11);
-  let doorFrameB = buildDoorFrame( 4.5, -11);
-
-  // Sign textures
-  let signTexA = makeTextTex(currentPair[0].label, currentPair[0].sub);
-  let signTexB = makeTextTex(currentPair[1].label, currentPair[1].sub);
-  let signQuadA = makeSignQuad(-4.5, 3.7, -11, 4.5, 1.8);
-  let signQuadB = makeSignQuad( 4.5, 3.7, -11, 4.5, 1.8);
-
-  // Room darkness increases with depth
-  function roomDarkness() { return Math.min(depth * 0.12, 0.75); }
-  function roomColor() {
-    const d = roomDarkness();
-    const v = 1.0 - d * 0.55;
-    return [v, v, v];
-  }
-
-  // White transition overlay
-  const transVS = `attribute vec2 aPos; void main(){ gl_Position=vec4(aPos,0,1); }`;
-  const transFS = `precision mediump float; uniform float uAlpha; void main(){ gl_FragColor=vec4(1,1,1,uAlpha); }`;
-  const transProg = mkProg(transVS, transFS);
-  const transVB = vbuf([-1,-1, 1,-1, 1,1, -1,1]);
-  const transIB = ibuf([0,1,2,0,2,3]);
-
-  function enterDoor(choice) {
-    if(transitioning) return;
-    transitioning = true;
-    transitionDir = 1;
-    choiceHistory.push(choice);
-
-    setTimeout(() => {
-      depth++;
-      player.x = 0; player.z = 5;
-      currentPair = getDoorPair(depth, choiceHistory);
-      signTexA = makeTextTex(currentPair[0].label, currentPair[0].sub);
-      signTexB = makeTextTex(currentPair[1].label, currentPair[1].sub);
-      document.getElementById('room-title').textContent =
-        depth === 0 ? 'THE BIRTH' : `ROOM ${depth + 1}`;
-      document.getElementById('depth-counter').textContent = `ROOM ${depth + 1}`;
-      transitionDir = -1;
-    }, 700);
-
-    setTimeout(() => {
-      transitioning = false;
-      transitionAlpha = 0;
-      transitionDir = 0;
-    }, 1400);
-  }
-
-  // ── Matrices ───────────────────────────────────────────
-  const proj = m4(), view = m4(), mvp = m4(), tmp = m4();
-  perspective(proj, 65*Math.PI/180, W/H, 0.1, 80);
-
-  // ── Render loop ────────────────────────────────────────
-  let last = 0;
-  let time = 0;
-  let hintOpacity = 1;
-
-  function frame(now) {
-    requestAnimationFrame(frame);
-    const dt = Math.min((now - last)/1000, 0.05);
-    last = now;
-    time += dt;
-
-    // ── Input
-    if(!transitioning) {
-      let dx=0, dz=0;
-      if(keys['w']||keys['arrowup'])    dz -= 1;
-      if(keys['s']||keys['arrowdown'])  dz += 1;
-      if(keys['a']||keys['arrowleft'])  dx -= 1;
-      if(keys['d']||keys['arrowright']) dx += 1;
-      if(dx||dz){
-        const l=Math.sqrt(dx*dx+dz*dz); dx/=l; dz/=l;
-        player.x = Math.max(-RW+0.8, Math.min(RW-0.8, player.x + dx*SPEED));
-        player.z = Math.max(-RD+0.8, Math.min(RD-0.8, player.z + dz*SPEED));
-      }
-
-      // Door collision — player within 1.5 units of door center z, and x in range
-      if(player.z < -RD + 2.5) {
-        if(player.x < -1) {
-          enterDoor(0);
-        } else {
-          enterDoor(1);
-        }
-      }
-    }
-
-    // ── Transition alpha
-    if(transitionDir === 1) transitionAlpha = Math.min(transitionAlpha + dt*2.2, 1);
-    if(transitionDir === -1) transitionAlpha = Math.max(transitionAlpha - dt*1.6, 0);
-
-    // ── Camera: behind and above, fixed angle (Petscop style)
-    const camDist = 9, camElev = 6.5;
-    const cx = player.x * 0.3; // slight lag
-    lookAt(view,
-      cx, camElev, player.z + camDist,
-      cx, 1.2, player.z
-    );
-    mul(mvp, proj, view);
-
-    // ── Draw
-    gl.viewport(0,0,W,H);
-    const rc = roomColor();
-    const bright = 1.0 - roomDarkness()*0.3;
-    gl.clearColor(rc[0]*bright, rc[1]*bright, rc[2]*bright, 1);
-    gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
-
-    // Room
-    gl.useProgram(roomProg);
-    gl.uniformMatrix4fv(gl.getUniformLocation(roomProg,'uMVP'), false, mvp);
-    gl.uniform3fv(gl.getUniformLocation(roomProg,'uColor'), rc);
-    gl.uniform1f(gl.getUniformLocation(roomProg,'uDarkness'), roomDarkness());
-    attrib(roomProg,'aPos',  roomGeom.vb, 3, 24, 0);
-    attrib(roomProg,'aNorm', roomGeom.vb, 3, 24, 12);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, roomGeom.ib);
-    gl.drawElements(gl.TRIANGLES, roomGeom.count, gl.UNSIGNED_SHORT, 0);
-
-    // Door frames
-    function drawFrame(frame) {
-      gl.useProgram(doorProg);
-      gl.uniformMatrix4fv(gl.getUniformLocation(doorProg,'uMVP'), false, mvp);
-      const darkness = roomDarkness();
-      const fv = Math.max(0.0, 0.15 - darkness*0.1);
-      gl.uniform4fv(gl.getUniformLocation(doorProg,'uCol'), [fv,fv,fv,1]);
-      attrib(doorProg,'aPos', frame.vb, 3, 12, 0);
-      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, frame.ib);
-      gl.drawElements(gl.TRIANGLES, frame.count, gl.UNSIGNED_SHORT, 0);
-    }
-    drawFrame(doorFrameA);
-    drawFrame(doorFrameB);
-
-    // Door signs
-    gl.useProgram(texProg);
-    gl.uniformMatrix4fv(gl.getUniformLocation(texProg,'uMVP'), false, mvp);
-    function drawSign(quad, tex) {
-      attrib(texProg,'aPos', quad.vb, 3, 20, 0);
-      attrib(texProg,'aUV',  quad.vb, 2, 20, 12);
-      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, quad.ib);
-      gl.bindTexture(gl.TEXTURE_2D, tex);
-      gl.uniform1i(gl.getUniformLocation(texProg,'uTex'), 0);
-      gl.uniform1f(gl.getUniformLocation(texProg,'uAlpha'), 1.0);
-      gl.drawElements(gl.TRIANGLES, quad.count, gl.UNSIGNED_SHORT, 0);
-    }
-    drawSign(signQuadA, signTexA);
-    drawSign(signQuadB, signTexB);
-
-    // Coin (Capi) billboard
-    gl.useProgram(coinProg);
-    gl.uniformMatrix4fv(gl.getUniformLocation(coinProg,'uMVP'),  false, mvp);
-    gl.uniformMatrix4fv(gl.getUniformLocation(coinProg,'uView'), false, view);
-    gl.uniform3fv(gl.getUniformLocation(coinProg,'uWorld'), [player.x, player.y, player.z]);
-    gl.uniform1f(gl.getUniformLocation(coinProg,'uRadius'), 0.55);
-    gl.uniform1f(gl.getUniformLocation(coinProg,'uTime'),   time);
-    attrib(coinProg,'aPos', coinVB, 2, 8, 0);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, coinIB);
-    gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
-
-    // White transition flash
-    if(transitionAlpha > 0.001) {
-      gl.disable(gl.DEPTH_TEST);
-      gl.useProgram(transProg);
-      gl.uniform1f(gl.getUniformLocation(transProg,'uAlpha'), transitionAlpha);
-      attrib(transProg,'aPos', transVB, 2, 8, 0);
-      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, transIB);
-      gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
-      gl.enable(gl.DEPTH_TEST);
-    }
-
-    // Hint fade on movement
-    if(keys['w']||keys['s']||keys['a']||keys['d']) hintOpacity *= 0.97;
-    document.getElementById('choice-hint').style.opacity = hintOpacity * 0.45;
-  }
-
-  requestAnimationFrame(frame);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  gl.disable(gl.BLEND);
 }
+
+// ── RENDER PORTALS (WebGL oval) ──────────────────────────────────────
+function renderPortals(s, mvp) {
+  gl.useProgram(prtProg);
+  bindQuad(prtProg);
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+
+  s.portals.forEach(p => {
+    // Portal sits at mid-wall height, z = back wall
+    const clip = projectW(mvp, p.wx, 0.5, PORTAL_Z);
+    if (clip[3] < 0.05) return;
+    const nx = clip[0]/clip[3], ny = clip[1]/clip[3];
+    const depth = Math.max(clip[3], .5);
+    const sx = .38/depth, sy = sx*(W/H)*2.2; // tall oval
+    const pulse = Math.sin(gTime*2.2 + p.wx) * .5 + .5;
+    gl.uniform2f(u(prtProg, 'u_ctr'), nx, ny);
+    gl.uniform2f(u(prtProg, 'u_sz'),  sx, sy);
+    gl.uniform3fv(u(prtProg, 'u_col'), p.col);
+    gl.uniform1f(u(prtProg, 'u_pulse'), pulse);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  });
+  gl.disable(gl.BLEND);
+}
+
+// ── OVERLAY LABELS + SCENE TITLE ─────────────────────────────────────
+function renderOverlay(s, mvp) {
+  oc.clearRect(0, 0, overlay.width, overlay.height);
+
+  s.portals.forEach(p => {
+    const clip = projectW(mvp, p.wx, 0.5, PORTAL_Z);
+    if (clip[3] < .05) return;
+    const sx = (clip[0]/clip[3] * .5 + .5) * overlay.width;
+    const sy = (1 - (clip[1]/clip[3] * .5 + .5)) * overlay.height;
+
+    // label above portal
+    const c = p.col;
+    oc.fillStyle = `rgba(${Math.round(c[0]*255)},${Math.round(c[1]*255)},${Math.round(c[2]*255)},.88)`;
+    oc.font = '10px Courier New';
+    oc.letterSpacing = '.15em';
+    oc.textAlign = 'center';
+
+    // subtle glitch jitter on label
+    const jx = (Math.random()-.5)*1.5, jy = (Math.random()-.5)*1.5;
+    oc.fillText(p.label, sx+jx, sy - 44 + jy);
+
+    // proximity prompt
+    const dist = Math.hypot(player.x - p.wx, player.z - PORTAL_Z);
+    if (dist < PORTAL_R * 1.5) {
+      const a = Math.max(0, 1 - dist / (PORTAL_R * 1.5));
+      oc.fillStyle = `rgba(255,255,255,${a * .7})`;
+      oc.font = '9px Courier New';
+      oc.fillText('[ enter ]', sx, sy + 50);
+    }
+  });
+}
+
+// ── TRANSITION ───────────────────────────────────────────────────────
+function goToScene(next) {
+  if (trans) return;
+  trans = true;
+  fadeEl.style.opacity = '1';
+  setTimeout(() => {
+    sceneIdx = next;
+    player.x = 0; player.z = 1; player.facingX = 0;
+    // show scene title
+    titleEl.style.opacity = '0';
+    setTimeout(() => {
+      titleEl.textContent = SCENES[sceneIdx].title;
+      fadeEl.style.opacity = '0';
+      titleEl.style.opacity = '1';
+      setTimeout(() => {
+        titleEl.style.opacity = '0';
+        trans = false;
+      }, 2400);
+    }, 400);
+  }, 750);
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────
+titleEl.textContent = SCENES[0].title;
+titleEl.style.opacity = '1';
+setTimeout(() => titleEl.style.opacity = '0', 2400);
+
+// ── MAIN LOOP ────────────────────────────────────────────────────────
+let last = 0;
+function loop(ts) {
+  const dt = Math.min((ts - last) / 1000, .05);
+  last = ts; gTime += dt;
+
+  // movement — pure world-space, camera never rotates
+  const SPEED = 4.5;
+  let dx = 0, dz = 0;
+  if (!trans) {
+    if (keys['w'] || keys['arrowup'])    dz -= 1;
+    if (keys['s'] || keys['arrowdown'])  dz += 1;
+    if (keys['a'] || keys['arrowleft'])  dx -= 1;
+    if (keys['d'] || keys['arrowright']) dx += 1;
+  }
+  const mv = dx !== 0 || dz !== 0;
+  if (mv) {
+    const len = Math.hypot(dx, dz);
+    player.x += (dx/len) * SPEED * dt;
+    player.z += (dz/len) * SPEED * dt;
+    player.facingX = dx / len;
+  }
+  player.x = Math.max(-RW + .5, Math.min(RW - .5, player.x));
+  player.z = Math.max(-RD + .5, Math.min(RD - .5, player.z));
+  player.moving = mv
+    ? Math.min(1, player.moving + dt * 6)
+    : Math.max(0, player.moving - dt * 9);
+  if (mv) player.walkPhase = (player.walkPhase + dt * 3) % 1;
+
+  // portal collision — check XZ distance to each portal
+  if (!trans) {
+    SCENES[sceneIdx].portals.forEach(p => {
+      const dist = Math.hypot(player.x - p.wx, player.z - PORTAL_Z);
+      if (dist < PORTAL_R) goToScene(p.next);
+    });
+  }
+
+  // ── RENDER ──
+  const s = SCENES[sceneIdx];
+  gl.clearColor(s.bg[0], s.bg[1], s.bg[2], 1);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST);
+
+  const mvp = getVP();
+  renderRoom(s, mvp);
+  renderShadow(mvp);
+  renderPortals(s, mvp);
+  renderBlob(mvp);
+  renderOverlay(s, mvp);
+
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
 </script>
 </body>
 </html>
