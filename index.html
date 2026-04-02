@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>CAPI</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -288,8 +288,8 @@ function uploadBlob(phase, moveAmt, facingX) {
 }
 
 // ── ROOM GEOMETRY ────────────────────────────────────────────────────
-// Room dimensions — portals sit at z = PORTAL_Z on the back wall
-const RW = 9, RH = 5, RD = 12;
+// Reduced room dimensions
+const RW = 4.5, RH = 2.5, RD = 6;
 const FLOOR_Y = -RH;
 const PORTAL_Z = -(RD - 0.1); // just in front of back wall
 
@@ -327,20 +327,19 @@ function buildRoom(floorC, wallC, ceilC) {
 
 // ── SCENE DEFINITIONS ────────────────────────────────────────────────
 // Portal collision radius — how close the player needs to get
-const PORTAL_R = 1.8;
+const PORTAL_R = 0.88;
 
 const SCENES = [
   {
-    title:   'THE THRESHOLD',
+    title:   'THE BEGINNING',
     bg:      [.05, .07, .14],
-    room:    buildRoom([.13,.14,.24], [.09,.10,.18], [.16,.15,.26]),
+    room:    buildRoom([.93,.14,.24], [.09,.10,.18], [.16,.15,.26]),
     portals: [
-      { label:'ENTER VOID',    col:[.52,.68,1.0], wx:-4.5, next:1 },
-      { label:'TRACE SIGNAL',  col:[1.0,.60,.42], wx: 4.5, next:2 },
+      { label:'ENTER THE LIGHT',    col:[.92,.68,1.0], wx:0, next:1 },
     ],
   },
   {
-    title:   'VERDANT ABYSS',
+    title:   'OUR FIRST STEPS',
     bg:      [.03, .10, .07],
     room:    buildRoom([.09,.18,.13], [.07,.13,.09], [.12,.20,.16]),
     portals: [
