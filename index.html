@@ -4,43 +4,12 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>CAPI</title>
-<style>
-* { margin:0; padding:0; box-sizing:border-box; }
-body { background:#000; overflow:hidden; }
-canvas { display:block; image-rendering:pixelated; }
+<link rel="stylesheet" href="styles.css">
 
-#overlay {
-  position:fixed; inset:0;
-  pointer-events:none; z-index:5;
-}
-
-#title {
-  position:fixed; top:32px; left:50%;
-  transform:translateX(-50%);
-  color:rgba(180,210,255,.72);
-  font:11px/1 'Courier New',monospace;
-  letter-spacing:.5em; text-transform:uppercase;
-  pointer-events:none; transition:opacity 1.6s;
-  white-space:nowrap;
-}
-
-#hint {
-  position:fixed; bottom:22px; left:50%;
-  transform:translateX(-50%);
-  color:rgba(180,210,255,.28);
-  font:9px/1 'Courier New',monospace;
-  letter-spacing:.22em; text-transform:uppercase;
-  pointer-events:none;
-}
-
-#fade {
-  position:fixed; inset:0; background:#000;
-  opacity:0; pointer-events:none; z-index:20;
-  transition:opacity .7s;
-}
-</style>
 </head>
 <body>
+<div id="birth"></div>
+<div id="birth-label">YOU ARE CAPI</div>
 <canvas id="c"></canvas>
 <canvas id="overlay"></canvas>
 <div id="title"></div>
@@ -49,6 +18,101 @@ canvas { display:block; image-rendering:pixelated; }
 
 <script>
 'use strict';
+
+// ── BIRTH SEQUENCE ───────────────────────────────────────────────────
+const birthEl = document.getElementById('birth');
+const birthLabel = document.getElementById('birth-label');
+const hintEl = document.getElementById('hint');
+let birthDone = false;
+hintEl.style.opacity = '0';
+
+(function runBirth() {
+  const bc = document.createElement('canvas');
+  const bctx = bc.getContext('2d');
+  bc.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;';
+  birthEl.appendChild(bc);
+
+  let bw, bh;
+  function bResize() {
+    bw = bc.width  = innerWidth;
+    bh = bc.height = innerHeight;
+  }
+  window.addEventListener('resize', bResize);
+  bResize();
+
+  const startTime = performance.now();
+  const TOTAL = 4200; // ms total birth
+
+  function drawBirth(ts) {
+    const t = Math.min((ts - startTime) / TOTAL, 1);
+    bctx.clearRect(0, 0, bw, bh);
+
+    // Background: white → fades out later
+    bctx.fillStyle = '#fff';
+    bctx.fillRect(0, 0, bw, bh);
+
+    const cx = bw / 2, cy = bh / 2;
+
+    // Orb radius: grows from 0 to ~15% of screen height
+    const maxR = Math.min(bh, bw) * 0.18;
+    // ease: slow start, burst at end
+    const ease = t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t+2,2)/2;
+    const r = ease * maxR;
+
+    // Pulsing halo
+    const haloR = r * (1.5 + Math.sin(ts / 220) * 0.12);
+    const halo = bctx.createRadialGradient(cx, cy, r * 0.8, cx, cy, haloR);
+    halo.addColorStop(0, `rgba(255,220,0,${0.22 * t})`);
+    halo.addColorStop(1, 'rgba(255,220,0,0)');
+    bctx.fillStyle = halo;
+    bctx.beginPath(); bctx.arc(cx, cy, haloR, 0, Math.PI*2); bctx.fill();
+
+    // Orb body
+    const g = bctx.createRadialGradient(cx - r*.25, cy - r*.25, r*.05, cx, cy, r);
+    g.addColorStop(0,   'rgba(255,255,210,1)');
+    g.addColorStop(0.3, 'rgba(255,230,30,1)');
+    g.addColorStop(0.75,'rgba(220,170,0,1)');
+    g.addColorStop(1,   'rgba(180,120,0,0.92)');
+    bctx.fillStyle = g;
+    bctx.beginPath(); bctx.arc(cx, cy, r, 0, Math.PI*2); bctx.fill();
+
+    // Specular
+    if (r > 4) {
+      const sp = bctx.createRadialGradient(cx - r*.3, cy - r*.3, 0, cx - r*.3, cy - r*.3, r*.45);
+      sp.addColorStop(0, 'rgba(255,255,255,0.7)');
+      sp.addColorStop(1, 'rgba(255,255,255,0)');
+      bctx.fillStyle = sp;
+      bctx.beginPath(); bctx.arc(cx - r*.3, cy - r*.3, r*.4, 0, Math.PI*2); bctx.fill();
+    }
+
+    // Label fades in after orb is mostly grown (t > 0.55)
+    if (t > 0.55) {
+      const la = Math.min(1, (t - 0.55) / 0.3);
+      birthLabel.style.color = `rgba(80,60,0,${la})`;
+    }
+
+    if (t < 1) {
+      requestAnimationFrame(drawBirth);
+    } else {
+      // Fade out birth screen
+      setTimeout(() => {
+        birthEl.style.transition = 'opacity 0.9s';
+        birthEl.style.opacity = '0';
+        birthLabel.style.transition = 'opacity 0.9s';
+        birthLabel.style.opacity = '0';
+        setTimeout(() => {
+          birthEl.remove();
+          birthLabel.remove();
+          birthDone = true;
+          hintEl.style.transition = 'opacity 1s';
+          hintEl.style.opacity = '1';
+          window.removeEventListener('resize', bResize);
+        }, 900);
+      }, 700);
+    }
+  }
+  requestAnimationFrame(drawBirth);
+})();
 
 // ── GL SETUP ────────────────────────────────────────────────────────
 const canvas  = document.getElementById('c');
@@ -127,7 +191,6 @@ function projectW(mvp, wx, wy, wz) {
 }
 
 // ── ROOM SHADER ─────────────────────────────────────────────────────
-// Gouraud shading + PS1-style vertex jitter
 const ROOM_VS = `
 precision mediump float;
 attribute vec3 a_pos;
@@ -156,7 +219,6 @@ uniform vec2 u_ctr, u_sz;
 varying vec2 v_uv;
 void main(){
   v_uv = a_pos * .5 + .5;
-  // u_sz.x is in NDC width, u_sz.y is in NDC height (already aspect-corrected)
   gl_Position = vec4(u_ctr + a_pos * u_sz, 0., 1.);
 }`;
 const SPR_FS = `
@@ -203,7 +265,7 @@ function bindQuad(prog) {
   gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
 }
 
-// ── BLOB TEXTURE (Canvas 2D → WebGL texture) ─────────────────────────
+// ── BLOB TEXTURE — YELLOW CAPI, NO FEET ──────────────────────────────
 const BC = 128;
 const blobC = document.createElement('canvas');
 blobC.width = blobC.height = BC;
@@ -217,68 +279,46 @@ gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
 function paintBlob(phase, moveAmt, facingX) {
   b2.clearRect(0, 0, BC, BC);
-  const cx = BC/2, cy = BC * .46;
-  const rx = 28, ry = 24;
+  const cx = BC/2, cy = BC * .50;
+  const rx = 30, ry = 26;
   const bob  = Math.sin(phase * Math.PI * 2) * moveAmt * 3.5;
   const sqX  = 1 + Math.cos(phase * Math.PI * 2) * moveAmt * .06;
   const sqY  = 1 - Math.cos(phase * Math.PI * 2) * moveAmt * .06;
 
-  // aura
-  const aura = b2.createRadialGradient(cx, cy+bob, 0, cx, cy+bob, rx*1.8);
-  aura.addColorStop(0, 'rgba(80,180,255,.15)');
+  // aura — warm golden
+  const aura = b2.createRadialGradient(cx, cy+bob, 0, cx, cy+bob, rx*1.9);
+  aura.addColorStop(0, 'rgba(255,200,0,.18)');
   aura.addColorStop(1, 'rgba(0,0,0,0)');
   b2.fillStyle = aura;
-  b2.beginPath(); b2.ellipse(cx, cy+bob, rx*1.8, ry*1.8, 0, 0, Math.PI*2); b2.fill();
+  b2.beginPath(); b2.ellipse(cx, cy+bob, rx*1.9, ry*1.9, 0, 0, Math.PI*2); b2.fill();
 
-  // body
+  // body — yellow
   const bg = b2.createRadialGradient(cx-rx*.2, cy+bob-ry*.2, 2, cx, cy+bob, rx*1.1);
-  bg.addColorStop(0,   'rgba(218,244,255,1)');
-  bg.addColorStop(.3,  'rgba(105,192,255,1)');
-  bg.addColorStop(.72, 'rgba(50,140,238,1)');
-  bg.addColorStop(1,   'rgba(22,85,205,.9)');
+  bg.addColorStop(0,   'rgba(255,255,210,1)');
+  bg.addColorStop(0.3, 'rgba(255,228,30,1)');
+  bg.addColorStop(0.72,'rgba(230,175,0,1)');
+  bg.addColorStop(1,   'rgba(180,120,0,0.9)');
   b2.fillStyle = bg;
   b2.beginPath(); b2.ellipse(cx, cy+bob, rx*sqX, ry*sqY, 0, 0, Math.PI*2); b2.fill();
 
   // specular
-  const sp = b2.createRadialGradient(cx-9, cy+bob-9, 1, cx-9, cy+bob-9, 14);
-  sp.addColorStop(0,   'rgba(255,255,255,.85)');
-  sp.addColorStop(.6,  'rgba(255,255,255,.12)');
+  const sp = b2.createRadialGradient(cx-10, cy+bob-10, 1, cx-10, cy+bob-10, 15);
+  sp.addColorStop(0,   'rgba(255,255,255,.80)');
+  sp.addColorStop(.6,  'rgba(255,255,255,.10)');
   sp.addColorStop(1,   'rgba(255,255,255,0)');
   b2.fillStyle = sp;
-  b2.beginPath(); b2.ellipse(cx-9, cy+bob-9, 12, 8, -.3, 0, Math.PI*2); b2.fill();
+  b2.beginPath(); b2.ellipse(cx-10, cy+bob-10, 12, 8, -.3, 0, Math.PI*2); b2.fill();
 
   // eyes — shift left/right based on facing
   const esh = facingX * 5;
-  const ey  = cy + bob - 5;
+  const ey  = cy + bob - 4;
   [cx-7+esh, cx+7+esh].forEach(ex => {
     b2.fillStyle = 'rgba(6,18,60,.9)';
     b2.beginPath(); b2.ellipse(ex, ey, 3.2, 3.2, 0, 0, Math.PI*2); b2.fill();
     b2.fillStyle = 'rgba(255,255,255,.88)';
     b2.beginPath(); b2.ellipse(ex-1, ey-1, 1.1, 1.1, 0, 0, Math.PI*2); b2.fill();
   });
-
-  // feet — below body, walk cycle
-  const footY = cy + ry * sqY + bob + 16;
-  const fsh   = facingX * 5;
-  [
-    { ox: -10 + fsh, ph: 0   },
-    { ox:  10 + fsh, ph: .5  },
-  ].forEach(f => {
-    const fp   = (phase + f.ph) % 1;
-    const lift = Math.sin(fp * Math.PI) * moveAmt * 8;
-    const swX  = Math.sin(fp * Math.PI * 2) * moveAmt * 2.5;
-    const fx   = cx + f.ox + swX;
-    const fy   = footY - lift;
-
-    const fg = b2.createRadialGradient(fx, fy, 0, fx, fy, 11);
-    fg.addColorStop(0, 'rgba(130,210,255,.95)');
-    fg.addColorStop(.5,'rgba(70,160,240,.5)');
-    fg.addColorStop(1, 'rgba(40,120,220,0)');
-    b2.fillStyle = fg;
-    b2.beginPath(); b2.ellipse(fx, fy, 10, 8, 0, 0, Math.PI*2); b2.fill();
-    b2.fillStyle = '#9dd8ff';
-    b2.beginPath(); b2.ellipse(fx, fy, 6.5, 5, 0, 0, Math.PI*2); b2.fill();
-  });
+  // no feet
 }
 
 function uploadBlob(phase, moveAmt, facingX) {
@@ -288,37 +328,30 @@ function uploadBlob(phase, moveAmt, facingX) {
 }
 
 // ── ROOM GEOMETRY ────────────────────────────────────────────────────
-// Reduced room dimensions
 const RW = 4.5, RH = 2.5, RD = 6;
 const FLOOR_Y = -RH;
-const PORTAL_Z = -(RD - 0.1); // just in front of back wall
+const PORTAL_Z = -(RD - 0.1);
 
 function buildRoom(floorC, wallC, ceilC) {
   const verts = [];
   function quad(a, b, c, d, col) {
     [a,b,c, a,c,d].forEach(p => verts.push(...p, ...col));
   }
-  // floor — slightly brighter
   const fl = floorC.map(v => Math.min(1, v * 1.15));
   quad([-RW, FLOOR_Y,-RD],[ RW, FLOOR_Y,-RD],[ RW, FLOOR_Y, RD],[-RW, FLOOR_Y, RD], fl);
 
-  // ceiling — slightly dimmer
   const ce = ceilC.map(v => v * .85);
   quad([-RW, RH,-RD],[-RW, RH, RD],[ RW, RH, RD],[ RW, RH,-RD], ce);
 
-  // back wall — lightest (what you walk toward)
   const bw = wallC.map(v => Math.min(1, v * 1.3));
   quad([-RW, FLOOR_Y,-RD],[ RW, FLOOR_Y,-RD],[ RW, RH,-RD],[-RW, RH,-RD], bw);
 
-  // front wall (behind camera — rarely seen, keep dark)
   const fw = wallC.map(v => v * .55);
   quad([-RW, FLOOR_Y, RD],[-RW, RH, RD],[ RW, RH, RD],[ RW, FLOOR_Y, RD], fw);
 
-  // left wall
   const lw = wallC.map((v,i) => i===0 ? Math.min(1,v*1.2) : v*.95);
   quad([-RW, FLOOR_Y,-RD],[-RW, RH,-RD],[-RW, RH, RD],[-RW, FLOOR_Y, RD], lw);
 
-  // right wall — slightly darker for depth
   const rw = wallC.map(v => v * .78);
   quad([ RW, FLOOR_Y,-RD],[ RW, FLOOR_Y, RD],[ RW, RH, RD],[ RW, RH,-RD], rw);
 
@@ -326,7 +359,6 @@ function buildRoom(floorC, wallC, ceilC) {
 }
 
 // ── SCENE DEFINITIONS ────────────────────────────────────────────────
-// Portal collision radius — how close the player needs to get
 const PORTAL_R = 0.88;
 
 const SCENES = [
@@ -335,7 +367,7 @@ const SCENES = [
     bg:      [.05, .07, .14],
     room:    buildRoom([.93,.14,.24], [.09,.10,.18], [.16,.15,.26]),
     portals: [
-      { label:'ENTER THE LIGHT',    col:[.92,.68,1.0], wx:0, next:1 },
+      { label:'ENTER THE LIGHT', col:[.92,.68,1.0], wx:0, next:1 },
     ],
   },
   {
@@ -367,7 +399,6 @@ const SCENES = [
   },
 ];
 
-// Upload room VBOs
 SCENES.forEach(s => {
   s.vbo = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, s.vbo);
@@ -411,19 +442,18 @@ function renderRoom(s, mvp) {
 }
 
 // ── RENDER SHADOW ────────────────────────────────────────────────────
-// Flat dark ellipse sitting on the floor directly under the blob
 const shadowBuf = gl.createBuffer();
 const N_SHADOW  = 28;
 function renderShadow(mvp) {
   const verts = [];
-  const fy = FLOOR_Y + 0.02; // just above floor to avoid z-fighting
+  const fy = FLOOR_Y + 0.02;
   for (let i = 0; i < N_SHADOW; i++) {
     const a0 = (i   / N_SHADOW) * Math.PI * 2;
     const a1 = ((i+1) / N_SHADOW) * Math.PI * 2;
     verts.push(
-      player.x,                       fy, player.z,            .08,.16,.38,
-      player.x + Math.cos(a0) * .75,  fy, player.z + Math.sin(a0)*.38, .08,.16,.38,
-      player.x + Math.cos(a1) * .75,  fy, player.z + Math.sin(a1)*.38, .08,.16,.38,
+      player.x,                       fy, player.z,            .12,.10,.02,
+      player.x + Math.cos(a0) * .75,  fy, player.z + Math.sin(a0)*.38, .12,.10,.02,
+      player.x + Math.cos(a1) * .75,  fy, player.z + Math.sin(a1)*.38, .12,.10,.02,
     );
   }
   gl.bindBuffer(gl.ARRAY_BUFFER, shadowBuf);
@@ -443,27 +473,16 @@ function renderShadow(mvp) {
 // ── RENDER BLOB ──────────────────────────────────────────────────────
 function renderBlob(mvp) {
   uploadBlob(player.walkPhase, player.moving, player.facingX);
-
-  // Project the player's feet position (y=FLOOR_Y) to get screen anchor
   const clip = projectW(mvp, player.x, FLOOR_Y, player.z);
   if (clip[3] < 0.05) return;
-
-  const w = clip[3]; // perspective divide
-  // NDC position of feet
+  const w = clip[3];
   const nx = clip[0] / w;
   const ny = clip[1] / w;
-
-  // Size: world-unit blob radius ~1.2, convert to NDC
-  // In NDC, 1 unit = half screen. We derive size from how big 1 world unit
-  // appears at this depth using the projection.
   const proj = perspective(Math.PI / 3.4, W / H, 0.1, 80);
-  const scaleNDC = proj[5] / w; // proj[5] = f (y scale), divide by depth
+  const scaleNDC = proj[5] / w;
   const blobRadius = 1.2;
-  // sx in NDC x, sy in NDC y (aspect-corrected)
   const sy = scaleNDC * blobRadius;
-  const sx = sy * (H / W); // correct for aspect
-
-  // Center billboard at feet, shift up by half blob height
+  const sx = sy * (H / W);
   const cy_ndc = ny + sy;
 
   gl.useProgram(sprProg);
@@ -479,7 +498,7 @@ function renderBlob(mvp) {
   gl.disable(gl.BLEND);
 }
 
-// ── RENDER PORTALS (WebGL oval) ──────────────────────────────────────
+// ── RENDER PORTALS ───────────────────────────────────────────────────
 function renderPortals(s, mvp) {
   gl.useProgram(prtProg);
   bindQuad(prtProg);
@@ -487,12 +506,11 @@ function renderPortals(s, mvp) {
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
 
   s.portals.forEach(p => {
-    // Portal sits at mid-wall height, z = back wall
     const clip = projectW(mvp, p.wx, 0.5, PORTAL_Z);
     if (clip[3] < 0.05) return;
     const nx = clip[0]/clip[3], ny = clip[1]/clip[3];
     const depth = Math.max(clip[3], .5);
-    const sx = .38/depth, sy = sx*(W/H)*2.2; // tall oval
+    const sx = .38/depth, sy = sx*(W/H)*2.2;
     const pulse = Math.sin(gTime*2.2 + p.wx) * .5 + .5;
     gl.uniform2f(u(prtProg, 'u_ctr'), nx, ny);
     gl.uniform2f(u(prtProg, 'u_sz'),  sx, sy);
@@ -503,7 +521,7 @@ function renderPortals(s, mvp) {
   gl.disable(gl.BLEND);
 }
 
-// ── OVERLAY LABELS + SCENE TITLE ─────────────────────────────────────
+// ── OVERLAY LABELS ───────────────────────────────────────────────────
 function renderOverlay(s, mvp) {
   oc.clearRect(0, 0, overlay.width, overlay.height);
 
@@ -513,18 +531,15 @@ function renderOverlay(s, mvp) {
     const sx = (clip[0]/clip[3] * .5 + .5) * overlay.width;
     const sy = (1 - (clip[1]/clip[3] * .5 + .5)) * overlay.height;
 
-    // label above portal
     const c = p.col;
     oc.fillStyle = `rgba(${Math.round(c[0]*255)},${Math.round(c[1]*255)},${Math.round(c[2]*255)},.88)`;
     oc.font = '10px Courier New';
     oc.letterSpacing = '.15em';
     oc.textAlign = 'center';
 
-    // subtle glitch jitter on label
     const jx = (Math.random()-.5)*1.5, jy = (Math.random()-.5)*1.5;
     oc.fillText(p.label, sx+jx, sy - 44 + jy);
 
-    // proximity prompt
     const dist = Math.hypot(player.x - p.wx, player.z - PORTAL_Z);
     if (dist < PORTAL_R * 1.5) {
       const a = Math.max(0, 1 - dist / (PORTAL_R * 1.5));
@@ -543,7 +558,6 @@ function goToScene(next) {
   setTimeout(() => {
     sceneIdx = next;
     player.x = 0; player.z = 1; player.facingX = 0;
-    // show scene title
     titleEl.style.opacity = '0';
     setTimeout(() => {
       titleEl.textContent = SCENES[sceneIdx].title;
@@ -568,10 +582,9 @@ function loop(ts) {
   const dt = Math.min((ts - last) / 1000, .05);
   last = ts; gTime += dt;
 
-  // movement — pure world-space, camera never rotates
   const SPEED = 4.5;
   let dx = 0, dz = 0;
-  if (!trans) {
+  if (!trans && birthDone) {
     if (keys['w'] || keys['arrowup'])    dz -= 1;
     if (keys['s'] || keys['arrowdown'])  dz += 1;
     if (keys['a'] || keys['arrowleft'])  dx -= 1;
@@ -591,7 +604,6 @@ function loop(ts) {
     : Math.max(0, player.moving - dt * 9);
   if (mv) player.walkPhase = (player.walkPhase + dt * 3) % 1;
 
-  // portal collision — check XZ distance to each portal
   if (!trans) {
     SCENES[sceneIdx].portals.forEach(p => {
       const dist = Math.hypot(player.x - p.wx, player.z - PORTAL_Z);
@@ -599,7 +611,6 @@ function loop(ts) {
     });
   }
 
-  // ── RENDER ──
   const s = SCENES[sceneIdx];
   gl.clearColor(s.bg[0], s.bg[1], s.bg[2], 1);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
