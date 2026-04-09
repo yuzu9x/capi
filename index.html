@@ -11,7 +11,7 @@
 <div id="birth-label">YOU ARE: CAPI</div>
 <canvas id="c"></canvas>
 <canvas id="overlay"></canvas>
-<div id="title"></div>
+<canvas id="title-canvas"></canvas>
 <div id="hint">WASD to walk · enter a portal</div>
 <div id="fade"></div>
 
@@ -72,11 +72,96 @@ hintEl.style.opacity = '0';
   requestAnimationFrame(drawBirth);
 })();
 
+// ── TITLE CANVAS ─────────────────────────────────────────────────────
+const titleCanvas = document.getElementById('title-canvas');
+const tc = titleCanvas.getContext('2d');
+const offC = document.createElement('canvas');
+const off = offC.getContext('2d');
+
+function resizeTitleCanvas() {
+  titleCanvas.width  = innerWidth;
+  titleCanvas.height = innerHeight;
+}
+window.addEventListener('resize', resizeTitleCanvas);
+resizeTitleCanvas();
+
+const titleAnim = { active:false, text:'', phase:'idle', t:0, color:[255,255,255] };
+const TITLE_IN_DUR   = 1.1;
+const TITLE_HOLD_DUR = 1.6;
+const TITLE_OUT_DUR  = 1.2;
+
+function pixelSize(t, phase) {
+  if (phase === 'in')   return Math.round(1 + (1-t)*(1-t)*38);
+  if (phase === 'hold') return 1;
+  if (phase === 'out')  return Math.round(1 + t*t*52);
+  return 1;
+}
+
+function renderTitleFrame(text, px, alpha, col) {
+  const TW = titleCanvas.width, TH = titleCanvas.height;
+  tc.clearRect(0, 0, TW, TH);
+  if (alpha <= 0 || px <= 0) return;
+  const fs = Math.min(TW * 0.09, 110);
+  offC.width = TW; offC.height = TH;
+  off.clearRect(0, 0, TW, TH);
+  off.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
+  off.font = `300 ${fs}px 'Handjet', monospace`;
+  off.letterSpacing = '0.35em';
+  off.textAlign = 'center';
+  off.textBaseline = 'middle';
+  off.fillText(text, TW/2, TH/2);
+  if (px <= 1) {
+    tc.globalAlpha = alpha;
+    tc.drawImage(offC, 0, 0);
+    tc.globalAlpha = 1;
+    return;
+  }
+  const sw = Math.max(1, Math.floor(TW / px));
+  const sh = Math.max(1, Math.floor(TH / px));
+  const tmp = document.createElement('canvas');
+  tmp.width = sw; tmp.height = sh;
+  const tctx = tmp.getContext('2d');
+  tctx.imageSmoothingEnabled = false;
+  tctx.drawImage(offC, 0, 0, sw, sh);
+  tc.globalAlpha = alpha;
+  tc.imageSmoothingEnabled = false;
+  tc.drawImage(tmp, 0, 0, TW, TH);
+  tc.globalAlpha = 1;
+}
+
+function showTitle(text, col) {
+  titleAnim.text   = text;
+  titleAnim.color  = col || [255,255,255];
+  titleAnim.phase  = 'in';
+  titleAnim.t      = 0;
+  titleAnim.active = true;
+}
+
+function updateTitle(dt) {
+  if (!titleAnim.active) { tc.clearRect(0,0,titleCanvas.width,titleCanvas.height); return; }
+  const ph = titleAnim.phase;
+  titleAnim.t += dt / (ph==='in' ? TITLE_IN_DUR : ph==='hold' ? TITLE_HOLD_DUR : TITLE_OUT_DUR);
+  if (titleAnim.t >= 1) {
+    titleAnim.t = 0;
+    if      (ph==='in')   titleAnim.phase = 'hold';
+    else if (ph==='hold') titleAnim.phase = 'out';
+    else { titleAnim.active = false; tc.clearRect(0,0,titleCanvas.width,titleCanvas.height); return; }
+  }
+  const t   = titleAnim.t;
+  const ph2 = titleAnim.phase;
+  const px  = pixelSize(t, ph2);
+  let alpha;
+  if      (ph2==='in')   alpha = t < 0.3 ? t/0.3 : 1;
+  else if (ph2==='hold') alpha = 1;
+  else                   alpha = 1 - t;
+  renderTitleFrame(titleAnim.text, px, alpha, titleAnim.color);
+}
+
+// ── GL SETUP ─────────────────────────────────────────────────────────
 const canvas  = document.getElementById('c');
 const overlay = document.getElementById('overlay');
 const oc      = overlay.getContext('2d');
 const gl      = canvas.getContext('webgl',{antialias:false});
-const titleEl = document.getElementById('title');
 const fadeEl  = document.getElementById('fade');
 
 let W, H;
@@ -137,8 +222,6 @@ function projectW(mvp,wx,wy,wz){
     mvp[3]*wx+mvp[7]*wy+mvp[11]*wz+mvp[15],
   ];
 }
-
-// Project a world point to NDC (x,y) — returns null if behind camera
 function toNDC(mvp,wx,wy,wz){
   const c=projectW(mvp,wx,wy,wz);
   if(c[3]<0.01) return null;
@@ -147,10 +230,8 @@ function toNDC(mvp,wx,wy,wz){
 
 const ROOM_VS=`
 precision mediump float;
-attribute vec3 a_pos;
-attribute vec3 a_col;
-uniform mat4 u_mvp;
-uniform float u_jitter;
+attribute vec3 a_pos; attribute vec3 a_col;
+uniform mat4 u_mvp; uniform float u_jitter;
 varying vec3 v_col;
 void main(){
   vec4 clip=u_mvp*vec4(a_pos,1.0);
@@ -159,21 +240,16 @@ void main(){
   gl_Position=clip; v_col=a_col;
 }`;
 const ROOM_FS=`
-precision mediump float;
-varying vec3 v_col;
+precision mediump float; varying vec3 v_col;
 void main(){ gl_FragColor=vec4(v_col,1.0); }`;
 const roomProg=mkProg(ROOM_VS,ROOM_FS);
 
 const SPR_VS=`
 precision mediump float;
-attribute vec2 a_pos;
-uniform vec2 u_ctr,u_sz;
-varying vec2 v_uv;
+attribute vec2 a_pos; uniform vec2 u_ctr,u_sz; varying vec2 v_uv;
 void main(){ v_uv=a_pos*.5+.5; gl_Position=vec4(u_ctr+a_pos*u_sz,0.,1.); }`;
 const SPR_FS=`
-precision mediump float;
-varying vec2 v_uv;
-uniform sampler2D u_tex;
+precision mediump float; varying vec2 v_uv; uniform sampler2D u_tex;
 void main(){
   vec4 c=texture2D(u_tex,v_uv);
   if(c.a<.05) discard;
@@ -183,15 +259,11 @@ const sprProg=mkProg(SPR_VS,SPR_FS);
 
 const PRT_VS=`
 precision mediump float;
-attribute vec2 a_pos;
-uniform vec2 u_ctr,u_sz;
-varying vec2 v_uv;
+attribute vec2 a_pos; uniform vec2 u_ctr,u_sz; varying vec2 v_uv;
 void main(){ v_uv=a_pos; gl_Position=vec4(a_pos*u_sz+u_ctr,0.,1.); }`;
 const PRT_FS=`
-precision mediump float;
-varying vec2 v_uv;
-uniform vec3 u_col;
-uniform float u_pulse;
+precision mediump float; varying vec2 v_uv;
+uniform vec3 u_col; uniform float u_pulse;
 void main(){
   float d=length(v_uv);
   if(d>1.0) discard;
@@ -225,8 +297,7 @@ gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
 
 function paintBlob(phase,moveAmt,facingX){
   b2.clearRect(0,0,BC,BC);
-  const cx=BC/2,cy=BC*.50;
-  const rx=30,ry=26;
+  const cx=BC/2,cy=BC*.50,rx=30,ry=26;
   const bob=Math.sin(phase*Math.PI*2)*moveAmt*3.5;
   const sqX=1+Math.cos(phase*Math.PI*2)*moveAmt*.06;
   const sqY=1-Math.cos(phase*Math.PI*2)*moveAmt*.06;
@@ -256,6 +327,7 @@ const RW=4.5,RH=2.5,RD=6;
 const FLOOR_Y=-RH;
 const PORTAL_Z=-(RD-0.1);
 const PORTAL_WORLD_R=0.85;
+const PRT_WR=0.80;
 
 function buildRoom(floorC,wallC,ceilC){
   const verts=[];
@@ -275,38 +347,34 @@ function buildRoom(floorC,wallC,ceilC){
   return{data:new Float32Array(verts),count:verts.length/6};
 }
 
-const PRT_WR = 0.80;
-
 const SCENES=[
   {
-    title:'THE BEGINNING', bg:[.05,.07,.14],
+    title:'THE BEGINNING', titleCol:[255,255,255], bg:[.05,.07,.14],
     room:buildRoom([.93,.14,.24],[.09,.10,.18],[.16,.15,.26]),
-    portals:[
-      {label:'ENTER THE LIGHT',col:[.92,.68,1.0],wx:0,next:1},
-    ],
+    portals:[{label:'ENTER THE LIGHT!',col:[.92,.68,1.0],wx:0,next:1}],
   },
   {
-    title:'OUR FIRST STEPS', bg:[.03,.10,.07],
+    title:'OUR FIRST STEPS', titleCol:[180,255,200], bg:[.03,.10,.07],
     room:buildRoom([.09,.18,.13],[.07,.13,.09],[.12,.20,.16]),
     portals:[
-      {label:'SURRENDER',col:[.42,.98,.68],wx:-2.2,next:2},
-      {label:'ASCEND',   col:[.78,.84,1.0],wx: 2.2,next:0},
+      {label:'SURRENDER...',col:[.42,.98,.68],wx:-2.2,next:2},
+      {label:'CRAWL',   col:[.78,.84,1.0],wx: 2.2,next:0},
     ],
   },
   {
-    title:'BURNING MERIDIAN', bg:[.14,.06,.03],
+    title:'EARLY TERRITORY', titleCol:[255,200,120], bg:[.14,.06,.03],
     room:buildRoom([.22,.12,.07],[.17,.08,.04],[.25,.14,.09]),
     portals:[
-      {label:'REMEMBER',col:[1.0,.70,.26],wx:-2.2,next:0},
-      {label:'FORGET',  col:[.58,.38,1.0],wx: 2.2,next:1},
+      {label:'A PACIFIER',col:[1.0,.70,.26],wx:-2.2,next:0},
+      {label:'A TOY',  col:[.58,.38,1.0],wx: 2.2,next:1},
     ],
   },
   {
-    title:'CRIMSON MEMBRANE', bg:[.12,.04,.09],
+    title:'CHOOSE', titleCol:[255,160,180], bg:[.12,.04,.09],
     room:buildRoom([.20,.07,.15],[.16,.05,.11],[.24,.09,.19]),
     portals:[
-      {label:'BECOME',   col:[1.0,.32,.52],wx:-2.2,next:1},
-      {label:'UNBECOME', col:[.32,.66,1.0],wx: 2.2,next:2},
+      {label:'MAMA',   col:[1.0,.32,.52],wx:-2.2,next:1},
+      {label:'PAPA', col:[.32,.66,1.0],wx: 2.2,next:2},
     ],
   },
 ];
@@ -397,36 +465,23 @@ function renderBlob(mvp){
   gl.disable(gl.BLEND);
 }
 
-// Derive portal NDC center + size by projecting actual world-space edge points.
-// The portal sits on the back wall (z = PORTAL_Z), centred at y=0.5,
-// with a horizontal radius PRT_WR in world-X and vertical radius PRT_WR * 1.1.
-function portalNDC(mvp, wx) {
-  const wy = 0.5;
-  const wz = PORTAL_Z;
-  const vr = PRT_WR * 1.1;
-
-  const cen   = toNDC(mvp, wx,        wy,    wz);
-  const right  = toNDC(mvp, wx+PRT_WR, wy,   wz);
-  const top    = toNDC(mvp, wx,        wy+vr, wz);
-
-  if(!cen || !right || !top) return null;
-
-  const sx = Math.abs(right[0] - cen[0]);
-  const sy = Math.abs(top[1]   - cen[1]);
-  return { nx: cen[0], ny: cen[1], sx, sy };
+function portalNDC(mvp,wx){
+  const wy=0.5,wz=PORTAL_Z,vr=PRT_WR*1.1;
+  const cen=toNDC(mvp,wx,wy,wz);
+  const right=toNDC(mvp,wx+PRT_WR,wy,wz);
+  const top=toNDC(mvp,wx,wy+vr,wz);
+  if(!cen||!right||!top) return null;
+  return{nx:cen[0],ny:cen[1],sx:Math.abs(right[0]-cen[0]),sy:Math.abs(top[1]-cen[1])};
 }
 
 function renderPortals(s,mvp){
-  gl.useProgram(prtProg);
-  bindQuad(prtProg);
-  gl.enable(gl.BLEND);
-  gl.blendFunc(gl.SRC_ALPHA,gl.ONE);
+  gl.useProgram(prtProg); bindQuad(prtProg);
+  gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA,gl.ONE);
   s.portals.forEach(p=>{
-    const nd = portalNDC(mvp, p.wx);
-    if(!nd) return;
+    const nd=portalNDC(mvp,p.wx); if(!nd) return;
     const pulse=Math.sin(gTime*2.2+p.wx)*.5+.5;
-    gl.uniform2f(u(prtProg,'u_ctr'), nd.nx, nd.ny);
-    gl.uniform2f(u(prtProg,'u_sz'),  nd.sx, nd.sy);
+    gl.uniform2f(u(prtProg,'u_ctr'),nd.nx,nd.ny);
+    gl.uniform2f(u(prtProg,'u_sz'),nd.sx,nd.sy);
     gl.uniform3fv(u(prtProg,'u_col'),p.col);
     gl.uniform1f(u(prtProg,'u_pulse'),pulse);
     gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
@@ -437,16 +492,13 @@ function renderPortals(s,mvp){
 function renderOverlay(s,mvp){
   oc.clearRect(0,0,overlay.width,overlay.height);
   s.portals.forEach(p=>{
-    const nd = portalNDC(mvp, p.wx);
-    if(!nd) return;
+    const nd=portalNDC(mvp,p.wx); if(!nd) return;
     const sx=(nd.nx*.5+.5)*overlay.width;
     const sy=(1-(nd.ny*.5+.5))*overlay.height;
     const c=p.col;
     oc.fillStyle=`rgba(${Math.round(c[0]*255)},${Math.round(c[1]*255)},${Math.round(c[2]*255)},.88)`;
-    oc.font='10px Courier New';
-    oc.letterSpacing='.15em';
-    oc.textAlign='center';
-    const jx=(Math.random()-.5)*1.5, jy=(Math.random()-.5)*1.5;
+    oc.font='10px Courier New'; oc.letterSpacing='.15em'; oc.textAlign='center';
+    const jx=(Math.random()-.5)*1.5,jy=(Math.random()-.5)*1.5;
     oc.fillText(p.label,sx+jx,sy-44+jy);
     const dist=Math.hypot(player.x-p.wx,player.z-PORTAL_Z);
     if(dist<PORTAL_WORLD_R*1.5){
@@ -462,19 +514,18 @@ function goToScene(next){
   if(trans) return; trans=true;
   fadeEl.style.opacity='1';
   setTimeout(()=>{
-    sceneIdx=next; player.x=0; player.z=1; player.facingX=0;
-    titleEl.style.opacity='0';
+    sceneIdx=next;
+    player.x=0; player.z=1; player.facingX=0;
+    const s=SCENES[sceneIdx];
     setTimeout(()=>{
-      titleEl.textContent=SCENES[sceneIdx].title;
-      fadeEl.style.opacity='0'; titleEl.style.opacity='1';
-      setTimeout(()=>{ titleEl.style.opacity='0'; trans=false; },2400);
+      fadeEl.style.opacity='0';
+      showTitle(s.title, s.titleCol);
+      setTimeout(()=>{ trans=false; }, (TITLE_IN_DUR+TITLE_HOLD_DUR)*1000);
     },400);
   },750);
 }
 
-titleEl.textContent=SCENES[0].title;
-titleEl.style.opacity='1';
-setTimeout(()=>titleEl.style.opacity='0',2400);
+showTitle(SCENES[0].title, SCENES[0].titleCol);
 
 let last=0;
 function loop(ts){
@@ -499,14 +550,12 @@ function loop(ts){
   player.z=Math.max(-RD+.5,Math.min(RD-.5,player.z));
   player.moving=mv ? Math.min(1,player.moving+dt*6) : Math.max(0,player.moving-dt*9);
   if(mv) player.walkPhase=(player.walkPhase+dt*3)%1;
-
   if(!trans){
     SCENES[sceneIdx].portals.forEach(p=>{
       const dist=Math.hypot(player.x-p.wx,player.z-PORTAL_Z);
       if(dist<PORTAL_WORLD_R) goToScene(p.next);
     });
   }
-
   const s=SCENES[sceneIdx];
   gl.clearColor(s.bg[0],s.bg[1],s.bg[2],1);
   gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
@@ -517,6 +566,7 @@ function loop(ts){
   renderPortals(s,mvp);
   renderBlob(mvp);
   renderOverlay(s,mvp);
+  updateTitle(dt);
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
