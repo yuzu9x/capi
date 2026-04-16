@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,6 +8,7 @@
 <title>CAPI</title>
 <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
 <div id="birth"></div>
 <div id="birth-label">YOU ARE: CAPI</div>
@@ -14,56 +17,52 @@
 <canvas id="title-canvas"></canvas>
 <div id="hint">WASD to walk · enter a portal</div>
 <div id="fade"></div>
-
 <script>
 'use strict';
-
-const birthEl = document.getElementById('birth');
-const birthLabel = document.getElementById('birth-label');
-const hintEl = document.getElementById('hint');
-let birthDone = false;
-hintEl.style.opacity = '0';
-
-(function runBirth() {
-  const bc = document.createElement('canvas');
-  const bctx = bc.getContext('2d');
-  bc.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;';
+const birthEl=document.getElementById('birth');
+const birthLabel=document.getElementById('birth-label');
+const hintEl=document.getElementById('hint');
+let birthDone=false;
+hintEl.style.opacity='0';
+(function runBirth(){
+  const bc=document.createElement('canvas');
+  const bctx=bc.getContext('2d');
+  bc.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;';
   birthEl.appendChild(bc);
-  let bw, bh;
-  function bResize() { bw = bc.width = innerWidth; bh = bc.height = innerHeight; }
-  window.addEventListener('resize', bResize); bResize();
-  const startTime = performance.now();
-  const TOTAL = 4200;
-  function drawBirth(ts) {
-    const t = Math.min((ts - startTime) / TOTAL, 1);
+  let bw,bh;
+  function bResize(){bw=bc.width=innerWidth;bh=bc.height=innerHeight;}
+  window.addEventListener('resize',bResize);bResize();
+  const startTime=performance.now();
+  const TOTAL=4200;
+  function drawBirth(ts){
+    const t=Math.min((ts-startTime)/TOTAL,1);
     bctx.clearRect(0,0,bw,bh);
-    bctx.fillStyle='#fff'; bctx.fillRect(0,0,bw,bh);
-    const cx=bw/2, cy=bh/2;
-    const maxR = Math.min(bh,bw)*.18;
-    const ease = t<.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2;
-    const r = ease*maxR;
-    const haloR = r*(1.5+Math.sin(ts/220)*.12);
-    const halo = bctx.createRadialGradient(cx,cy,r*.8,cx,cy,haloR);
-    halo.addColorStop(0,`rgba(255,220,0,${.22*t})`); halo.addColorStop(1,'rgba(255,220,0,0)');
-    bctx.fillStyle=halo; bctx.beginPath(); bctx.arc(cx,cy,haloR,0,Math.PI*2); bctx.fill();
+    bctx.fillStyle='#fff';bctx.fillRect(0,0,bw,bh);
+    const cx=bw/2,cy=bh/2,maxR=Math.min(bh,bw)*.18;
+    const ease=t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+    const r=ease*maxR;
+    const haloR=r*(1.5+Math.sin(ts/220)*.12);
+    const halo=bctx.createRadialGradient(cx,cy,r*.8,cx,cy,haloR);
+    halo.addColorStop(0,`rgba(255,220,0,${.22*t})`);halo.addColorStop(1,'rgba(255,220,0,0)');
+    bctx.fillStyle=halo;bctx.beginPath();bctx.arc(cx,cy,haloR,0,Math.PI*2);bctx.fill();
     const g=bctx.createRadialGradient(cx-r*.25,cy-r*.25,r*.05,cx,cy,r);
-    g.addColorStop(0,'rgba(255,255,210,1)'); g.addColorStop(.3,'rgba(255,230,30,1)');
-    g.addColorStop(.75,'rgba(220,170,0,1)'); g.addColorStop(1,'rgba(180,120,0,.92)');
-    bctx.fillStyle=g; bctx.beginPath(); bctx.arc(cx,cy,r,0,Math.PI*2); bctx.fill();
+    g.addColorStop(0,'rgba(255,255,210,1)');g.addColorStop(.3,'rgba(255,230,30,1)');
+    g.addColorStop(.75,'rgba(220,170,0,1)');g.addColorStop(1,'rgba(180,120,0,.92)');
+    bctx.fillStyle=g;bctx.beginPath();bctx.arc(cx,cy,r,0,Math.PI*2);bctx.fill();
     if(r>4){
       const sp=bctx.createRadialGradient(cx-r*.3,cy-r*.3,0,cx-r*.3,cy-r*.3,r*.45);
-      sp.addColorStop(0,'rgba(255,255,255,.7)'); sp.addColorStop(1,'rgba(255,255,255,0)');
-      bctx.fillStyle=sp; bctx.beginPath(); bctx.arc(cx-r*.3,cy-r*.3,r*.4,0,Math.PI*2); bctx.fill();
+      sp.addColorStop(0,'rgba(255,255,255,.7)');sp.addColorStop(1,'rgba(255,255,255,0)');
+      bctx.fillStyle=sp;bctx.beginPath();bctx.arc(cx-r*.3,cy-r*.3,r*.4,0,Math.PI*2);bctx.fill();
     }
-    if(t>.55){ const la=Math.min(1,(t-.55)/.3); birthLabel.style.color=`rgba(80,60,0,${la})`; }
-    if(t<1){ requestAnimationFrame(drawBirth); }
-    else {
+    if(t>.55){const la=Math.min(1,(t-.55)/.3);birthLabel.style.color=`rgba(80,60,0,${la})`;}
+    if(t<1){requestAnimationFrame(drawBirth);}
+    else{
       setTimeout(()=>{
-        birthEl.style.transition='opacity .9s'; birthEl.style.opacity='0';
-        birthLabel.style.transition='opacity .9s'; birthLabel.style.opacity='0';
+        birthEl.style.transition='opacity .9s';birthEl.style.opacity='0';
+        birthLabel.style.transition='opacity .9s';birthLabel.style.opacity='0';
         setTimeout(()=>{
-          birthEl.remove(); birthLabel.remove(); birthDone=true;
-          hintEl.style.transition='opacity 1s'; hintEl.style.opacity='1';
+          birthEl.remove();birthLabel.remove();birthDone=true;
+          hintEl.style.transition='opacity 1s';hintEl.style.opacity='1';
           window.removeEventListener('resize',bResize);
         },900);
       },700);
@@ -72,110 +71,80 @@ hintEl.style.opacity = '0';
   requestAnimationFrame(drawBirth);
 })();
 
-// ── TITLE CANVAS ─────────────────────────────────────────────────────
-const titleCanvas = document.getElementById('title-canvas');
-const tc = titleCanvas.getContext('2d');
-const offC = document.createElement('canvas');
-const off = offC.getContext('2d');
-
-function resizeTitleCanvas() {
-  titleCanvas.width  = innerWidth;
-  titleCanvas.height = innerHeight;
-}
-window.addEventListener('resize', resizeTitleCanvas);
-resizeTitleCanvas();
-
-const titleAnim = { active:false, text:'', phase:'idle', t:0, color:[255,255,255] };
-const TITLE_IN_DUR   = 1.1;
-const TITLE_HOLD_DUR = 1.6;
-const TITLE_OUT_DUR  = 1.2;
-
-function pixelSize(t, phase) {
-  if (phase === 'in')   return Math.round(1 + (1-t)*(1-t)*38);
-  if (phase === 'hold') return 1;
-  if (phase === 'out')  return Math.round(1 + t*t*52);
+const titleCanvas=document.getElementById('title-canvas');
+const tc=titleCanvas.getContext('2d');
+const offC=document.createElement('canvas');
+const off=offC.getContext('2d');
+function resizeTitleCanvas(){titleCanvas.width=innerWidth;titleCanvas.height=innerHeight;}
+window.addEventListener('resize',resizeTitleCanvas);resizeTitleCanvas();
+const titleAnim={active:false,text:'',phase:'idle',t:0,color:[255,255,255]};
+const TITLE_IN_DUR=1.1,TITLE_HOLD_DUR=1.6,TITLE_OUT_DUR=1.2;
+function pixelSize(t,phase){
+  if(phase==='in') return Math.round(1+(1-t)*(1-t)*38);
+  if(phase==='hold') return 1;
+  if(phase==='out') return Math.round(1+t*t*52);
   return 1;
 }
-
-function renderTitleFrame(text, px, alpha, col) {
-  const TW = titleCanvas.width, TH = titleCanvas.height;
-  tc.clearRect(0, 0, TW, TH);
-  if (alpha <= 0 || px <= 0) return;
-  const fs = Math.min(TW * 0.09, 110);
-  offC.width = TW; offC.height = TH;
-  off.clearRect(0, 0, TW, TH);
-  off.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
-  off.font = `300 ${fs}px 'Handjet', monospace`;
-  off.letterSpacing = '0.35em';
-  off.textAlign = 'center';
-  off.textBaseline = 'middle';
-  off.fillText(text, TW/2, TH/2);
-  if (px <= 1) {
-    tc.globalAlpha = alpha;
-    tc.drawImage(offC, 0, 0);
-    tc.globalAlpha = 1;
-    return;
-  }
-  const sw = Math.max(1, Math.floor(TW / px));
-  const sh = Math.max(1, Math.floor(TH / px));
-  const tmp = document.createElement('canvas');
-  tmp.width = sw; tmp.height = sh;
-  const tctx = tmp.getContext('2d');
-  tctx.imageSmoothingEnabled = false;
-  tctx.drawImage(offC, 0, 0, sw, sh);
-  tc.globalAlpha = alpha;
-  tc.imageSmoothingEnabled = false;
-  tc.drawImage(tmp, 0, 0, TW, TH);
-  tc.globalAlpha = 1;
+function renderTitleFrame(text,px,alpha,col){
+  const TW=titleCanvas.width,TH=titleCanvas.height;
+  tc.clearRect(0,0,TW,TH);
+  if(alpha<=0||px<=0) return;
+  const fs=Math.min(TW*.09,110);
+  offC.width=TW;offC.height=TH;
+  off.clearRect(0,0,TW,TH);
+  off.fillStyle=`rgb(${col[0]},${col[1]},${col[2]})`;
+  off.font=`300 ${fs}px 'Courier New',monospace`;
+  off.letterSpacing='0.35em';
+  off.textAlign='center';off.textBaseline='middle';
+  off.fillText(text,TW/2,TH/2);
+  if(px<=1){tc.globalAlpha=alpha;tc.drawImage(offC,0,0);tc.globalAlpha=1;return;}
+  const sw=Math.max(1,Math.floor(TW/px)),sh=Math.max(1,Math.floor(TH/px));
+  const tmp=document.createElement('canvas');
+  tmp.width=sw;tmp.height=sh;
+  const tctx=tmp.getContext('2d');
+  tctx.imageSmoothingEnabled=false;tctx.drawImage(offC,0,0,sw,sh);
+  tc.globalAlpha=alpha;tc.imageSmoothingEnabled=false;
+  tc.drawImage(tmp,0,0,TW,TH);tc.globalAlpha=1;
 }
-
-function showTitle(text, col) {
-  titleAnim.text   = text;
-  titleAnim.color  = col || [255,255,255];
-  titleAnim.phase  = 'in';
-  titleAnim.t      = 0;
-  titleAnim.active = true;
+function showTitle(text,col){
+  titleAnim.text=text;titleAnim.color=col||[255,255,255];
+  titleAnim.phase='in';titleAnim.t=0;titleAnim.active=true;
 }
-
-function updateTitle(dt) {
-  if (!titleAnim.active) { tc.clearRect(0,0,titleCanvas.width,titleCanvas.height); return; }
-  const ph = titleAnim.phase;
-  titleAnim.t += dt / (ph==='in' ? TITLE_IN_DUR : ph==='hold' ? TITLE_HOLD_DUR : TITLE_OUT_DUR);
-  if (titleAnim.t >= 1) {
-    titleAnim.t = 0;
-    if      (ph==='in')   titleAnim.phase = 'hold';
-    else if (ph==='hold') titleAnim.phase = 'out';
-    else { titleAnim.active = false; tc.clearRect(0,0,titleCanvas.width,titleCanvas.height); return; }
+function updateTitle(dt){
+  if(!titleAnim.active){tc.clearRect(0,0,titleCanvas.width,titleCanvas.height);return;}
+  const ph=titleAnim.phase;
+  titleAnim.t+=dt/(ph==='in'?TITLE_IN_DUR:ph==='hold'?TITLE_HOLD_DUR:TITLE_OUT_DUR);
+  if(titleAnim.t>=1){
+    titleAnim.t=0;
+    if(ph==='in') titleAnim.phase='hold';
+    else if(ph==='hold') titleAnim.phase='out';
+    else{titleAnim.active=false;tc.clearRect(0,0,titleCanvas.width,titleCanvas.height);return;}
   }
-  const t   = titleAnim.t;
-  const ph2 = titleAnim.phase;
-  const px  = pixelSize(t, ph2);
+  const t=titleAnim.t,ph2=titleAnim.phase;
+  const px=pixelSize(t,ph2);
   let alpha;
-  if      (ph2==='in')   alpha = t < 0.3 ? t/0.3 : 1;
-  else if (ph2==='hold') alpha = 1;
-  else                   alpha = 1 - t;
-  renderTitleFrame(titleAnim.text, px, alpha, titleAnim.color);
+  if(ph2==='in') alpha=t<0.3?t/0.3:1;
+  else if(ph2==='hold') alpha=1;
+  else alpha=1-t;
+  renderTitleFrame(titleAnim.text,px,alpha,titleAnim.color);
 }
 
-// ── GL SETUP ─────────────────────────────────────────────────────────
-const canvas  = document.getElementById('c');
-const overlay = document.getElementById('overlay');
-const oc      = overlay.getContext('2d');
-const gl      = canvas.getContext('webgl',{antialias:false});
-const fadeEl  = document.getElementById('fade');
-
-let W, H;
-function resize() {
-  W = Math.floor(innerWidth/2); H = Math.floor(innerHeight/2);
-  canvas.width=W; canvas.height=H;
-  canvas.style.width=innerWidth+'px'; canvas.style.height=innerHeight+'px';
-  overlay.width=innerWidth; overlay.height=innerHeight;
+const canvas=document.getElementById('c');
+const overlay=document.getElementById('overlay');
+const oc=overlay.getContext('2d');
+const gl=canvas.getContext('webgl',{antialias:false});
+const fadeEl=document.getElementById('fade');
+let W,H;
+function resize(){
+  W=Math.floor(innerWidth/2);H=Math.floor(innerHeight/2);
+  canvas.width=W;canvas.height=H;
+  canvas.style.width=innerWidth+'px';canvas.style.height=innerHeight+'px';
+  overlay.width=innerWidth;overlay.height=innerHeight;
   gl.viewport(0,0,W,H);
 }
-window.addEventListener('resize',resize); resize();
-
+window.addEventListener('resize',resize);resize();
 function mkShader(t,src){
-  const s=gl.createShader(t); gl.shaderSource(s,src); gl.compileShader(s);
+  const s=gl.createShader(t);gl.shaderSource(s,src);gl.compileShader(s);
   if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(s));
   return s;
 }
@@ -183,37 +152,35 @@ function mkProg(vs,fs){
   const p=gl.createProgram();
   gl.attachShader(p,mkShader(gl.VERTEX_SHADER,vs));
   gl.attachShader(p,mkShader(gl.FRAGMENT_SHADER,fs));
-  gl.linkProgram(p); return p;
+  gl.linkProgram(p);return p;
 }
-function u(p,n){ return gl.getUniformLocation(p,n); }
-
-function m4(){ return new Float32Array(16); }
+function u(p,n){return gl.getUniformLocation(p,n);}
+function m4(){return new Float32Array(16);}
 function mul(a,b){
   const r=m4();
   for(let i=0;i<4;i++) for(let j=0;j<4;j++){
-    let v=0; for(let k=0;k<4;k++) v+=a[i+k*4]*b[k+j*4]; r[i+j*4]=v;
+    let v=0;for(let k=0;k<4;k++) v+=a[i+k*4]*b[k+j*4];r[i+j*4]=v;
   }
   return r;
 }
 function perspective(fov,asp,n,f){
-  const m=m4(),t=1/Math.tan(fov*.5);
-  m[0]=t/asp; m[5]=t; m[10]=(f+n)/(n-f); m[11]=-1; m[14]=2*f*n/(n-f); return m;
+  const mm=m4(),t=1/Math.tan(fov*.5);
+  mm[0]=t/asp;mm[5]=t;mm[10]=(f+n)/(n-f);mm[11]=-1;mm[14]=2*f*n/(n-f);return mm;
 }
 function lookAt(eye,at){
   const up=[0,1,0];
   const z=norm(sub3(eye,at)),x=norm(cross(up,z)),y=cross(z,x);
-  const m=m4();
-  m[0]=x[0];m[4]=x[1];m[8]=x[2];
-  m[1]=y[0];m[5]=y[1];m[9]=y[2];
-  m[2]=z[0];m[6]=z[1];m[10]=z[2];
-  m[12]=-dot(x,eye);m[13]=-dot(y,eye);m[14]=-dot(z,eye);m[15]=1;
-  return m;
+  const mm=m4();
+  mm[0]=x[0];mm[4]=x[1];mm[8]=x[2];
+  mm[1]=y[0];mm[5]=y[1];mm[9]=y[2];
+  mm[2]=z[0];mm[6]=z[1];mm[10]=z[2];
+  mm[12]=-dot(x,eye);mm[13]=-dot(y,eye);mm[14]=-dot(z,eye);mm[15]=1;
+  return mm;
 }
 function sub3(a,b){return[a[0]-b[0],a[1]-b[1],a[2]-b[2]];}
 function dot(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];}
 function cross(a,b){return[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];}
 function norm(v){const l=Math.hypot(...v)||1;return v.map(x=>x/l);}
-
 function projectW(mvp,wx,wy,wz){
   return[
     mvp[0]*wx+mvp[4]*wy+mvp[8]*wz+mvp[12],
@@ -225,45 +192,42 @@ function projectW(mvp,wx,wy,wz){
 function toNDC(mvp,wx,wy,wz){
   const c=projectW(mvp,wx,wy,wz);
   if(c[3]<0.01) return null;
-  return[c[0]/c[3], c[1]/c[3]];
+  return[c[0]/c[3],c[1]/c[3]];
 }
-
 const ROOM_VS=`
 precision mediump float;
-attribute vec3 a_pos; attribute vec3 a_col;
-uniform mat4 u_mvp; uniform float u_jitter;
+attribute vec3 a_pos;attribute vec3 a_col;
+uniform mat4 u_mvp;uniform float u_jitter;
 varying vec3 v_col;
 void main(){
   vec4 clip=u_mvp*vec4(a_pos,1.0);
   float g=80.0*u_jitter;
   clip.xy=floor(clip.xy*g+0.5)/g;
-  gl_Position=clip; v_col=a_col;
+  gl_Position=clip;v_col=a_col;
 }`;
 const ROOM_FS=`
-precision mediump float; varying vec3 v_col;
-void main(){ gl_FragColor=vec4(v_col,1.0); }`;
+precision mediump float;varying vec3 v_col;
+void main(){gl_FragColor=vec4(v_col,1.0);}`;
 const roomProg=mkProg(ROOM_VS,ROOM_FS);
-
 const SPR_VS=`
 precision mediump float;
-attribute vec2 a_pos; uniform vec2 u_ctr,u_sz; varying vec2 v_uv;
-void main(){ v_uv=a_pos*.5+.5; gl_Position=vec4(u_ctr+a_pos*u_sz,0.,1.); }`;
+attribute vec2 a_pos;uniform vec2 u_ctr,u_sz;varying vec2 v_uv;
+void main(){v_uv=a_pos*.5+.5;gl_Position=vec4(u_ctr+a_pos*u_sz,0.,1.);}`;
 const SPR_FS=`
-precision mediump float; varying vec2 v_uv; uniform sampler2D u_tex;
+precision mediump float;varying vec2 v_uv;uniform sampler2D u_tex;
 void main(){
   vec4 c=texture2D(u_tex,v_uv);
   if(c.a<.05) discard;
   gl_FragColor=c;
 }`;
 const sprProg=mkProg(SPR_VS,SPR_FS);
-
 const PRT_VS=`
 precision mediump float;
-attribute vec2 a_pos; uniform vec2 u_ctr,u_sz; varying vec2 v_uv;
-void main(){ v_uv=a_pos; gl_Position=vec4(a_pos*u_sz+u_ctr,0.,1.); }`;
+attribute vec2 a_pos;uniform vec2 u_ctr,u_sz;varying vec2 v_uv;
+void main(){v_uv=a_pos;gl_Position=vec4(a_pos*u_sz+u_ctr,0.,1.);}`;
 const PRT_FS=`
-precision mediump float; varying vec2 v_uv;
-uniform vec3 u_col; uniform float u_pulse;
+precision mediump float;varying vec2 v_uv;
+uniform vec3 u_col;uniform float u_pulse;
 void main(){
   float d=length(v_uv);
   if(d>1.0) discard;
@@ -273,7 +237,6 @@ void main(){
   gl_FragColor=vec4(u_col*a,a);
 }`;
 const prtProg=mkProg(PRT_VS,PRT_FS);
-
 const QB=gl.createBuffer();
 gl.bindBuffer(gl.ARRAY_BUFFER,QB);
 gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
@@ -283,7 +246,6 @@ function bindQuad(prog){
   gl.enableVertexAttribArray(a);
   gl.vertexAttribPointer(a,2,gl.FLOAT,false,0,0);
 }
-
 const BC=128;
 const blobC=document.createElement('canvas');
 blobC.width=blobC.height=BC;
@@ -294,7 +256,6 @@ gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);
 gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
 gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
 gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
-
 function paintBlob(phase,moveAmt,facingX){
   b2.clearRect(0,0,BC,BC);
   const cx=BC/2,cy=BC*.50,rx=30,ry=26;
@@ -302,19 +263,19 @@ function paintBlob(phase,moveAmt,facingX){
   const sqX=1+Math.cos(phase*Math.PI*2)*moveAmt*.06;
   const sqY=1-Math.cos(phase*Math.PI*2)*moveAmt*.06;
   const aura=b2.createRadialGradient(cx,cy+bob,0,cx,cy+bob,rx*1.9);
-  aura.addColorStop(0,'rgba(255,200,0,.18)'); aura.addColorStop(1,'rgba(0,0,0,0)');
-  b2.fillStyle=aura; b2.beginPath(); b2.ellipse(cx,cy+bob,rx*1.9,ry*1.9,0,0,Math.PI*2); b2.fill();
+  aura.addColorStop(0,'rgba(255,200,0,.18)');aura.addColorStop(1,'rgba(0,0,0,0)');
+  b2.fillStyle=aura;b2.beginPath();b2.ellipse(cx,cy+bob,rx*1.9,ry*1.9,0,0,Math.PI*2);b2.fill();
   const bg=b2.createRadialGradient(cx-rx*.2,cy+bob-ry*.2,2,cx,cy+bob,rx*1.1);
-  bg.addColorStop(0,'rgba(255,255,210,1)'); bg.addColorStop(.3,'rgba(255,228,30,1)');
-  bg.addColorStop(.72,'rgba(230,175,0,1)'); bg.addColorStop(1,'rgba(180,120,0,.9)');
-  b2.fillStyle=bg; b2.beginPath(); b2.ellipse(cx,cy+bob,rx*sqX,ry*sqY,0,0,Math.PI*2); b2.fill();
+  bg.addColorStop(0,'rgba(255,255,210,1)');bg.addColorStop(.3,'rgba(255,228,30,1)');
+  bg.addColorStop(.72,'rgba(230,175,0,1)');bg.addColorStop(1,'rgba(180,120,0,.9)');
+  b2.fillStyle=bg;b2.beginPath();b2.ellipse(cx,cy+bob,rx*sqX,ry*sqY,0,0,Math.PI*2);b2.fill();
   const sp=b2.createRadialGradient(cx-10,cy+bob-10,1,cx-10,cy+bob-10,15);
-  sp.addColorStop(0,'rgba(255,255,255,.80)'); sp.addColorStop(.6,'rgba(255,255,255,.10)'); sp.addColorStop(1,'rgba(255,255,255,0)');
-  b2.fillStyle=sp; b2.beginPath(); b2.ellipse(cx-10,cy+bob-10,12,8,-.3,0,Math.PI*2); b2.fill();
+  sp.addColorStop(0,'rgba(255,255,255,.80)');sp.addColorStop(.6,'rgba(255,255,255,.10)');sp.addColorStop(1,'rgba(255,255,255,0)');
+  b2.fillStyle=sp;b2.beginPath();b2.ellipse(cx-10,cy+bob-10,12,8,-.3,0,Math.PI*2);b2.fill();
   const esh=facingX*5,ey=cy+bob-4;
   [cx-7+esh,cx+7+esh].forEach(ex=>{
-    b2.fillStyle='rgba(6,18,60,.9)'; b2.beginPath(); b2.ellipse(ex,ey,3.2,3.2,0,0,Math.PI*2); b2.fill();
-    b2.fillStyle='rgba(255,255,255,.88)'; b2.beginPath(); b2.ellipse(ex-1,ey-1,1.1,1.1,0,0,Math.PI*2); b2.fill();
+    b2.fillStyle='rgba(6,18,60,.9)';b2.beginPath();b2.ellipse(ex,ey,3.2,3.2,0,0,Math.PI*2);b2.fill();
+    b2.fillStyle='rgba(255,255,255,.88)';b2.beginPath();b2.ellipse(ex-1,ey-1,1.1,1.1,0,0,Math.PI*2);b2.fill();
   });
 }
 function uploadBlob(phase,moveAmt,facingX){
@@ -322,13 +283,11 @@ function uploadBlob(phase,moveAmt,facingX){
   gl.bindTexture(gl.TEXTURE_2D,blobTex);
   gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,blobC);
 }
-
 const RW=4.5,RH=2.5,RD=6;
 const FLOOR_Y=-RH;
 const PORTAL_Z=-(RD-0.1);
 const PORTAL_WORLD_R=0.85;
 const PRT_WR=0.80;
-
 function buildRoom(floorC,wallC,ceilC){
   const verts=[];
   function quad(a,b,c,d,col){[a,b,c,a,c,d].forEach(p=>verts.push(...p,...col));}
@@ -347,34 +306,37 @@ function buildRoom(floorC,wallC,ceilC){
   return{data:new Float32Array(verts),count:verts.length/6};
 }
 
+// Every portal in every scene advances to the next stage — no wrong door.
 const SCENES=[
   {
-    title:'THE BEGINNING', titleCol:[255,255,255], bg:[.05,.07,.14],
+    title:'THE BEGINNING',titleCol:[255,255,255],bg:[.05,.07,.14],
     room:buildRoom([.93,.14,.24],[.09,.10,.18],[.16,.15,.26]),
-    portals:[{label:'ENTER THE LIGHT!',col:[.92,.68,1.0],wx:0,next:1}],
+    portals:[
+      {label:'ENTER THE LIGHT',col:[.92,.68,1.0],wx:0,next:1},
+    ],
   },
   {
-    title:'OUR FIRST STEPS', titleCol:[180,255,200], bg:[.03,.10,.07],
+    title:'OUR FIRST STEPS',titleCol:[180,255,200],bg:[.03,.10,.07],
     room:buildRoom([.09,.18,.13],[.07,.13,.09],[.12,.20,.16]),
     portals:[
-      {label:'SURRENDER...',col:[.42,.98,.68],wx:-2.2,next:2},
-      {label:'CRAWL',   col:[.78,.84,1.0],wx: 2.2,next:0},
+      {label:'SURRENDER',col:[.42,.98,.68],wx:-2.2,next:2},
+      {label:'CRAWL',    col:[.78,.84,1.0],wx: 2.2,next:2},
     ],
   },
   {
-    title:'EARLY TERRITORY', titleCol:[255,200,120], bg:[.14,.06,.03],
+    title:'EARLY TERRITORY',titleCol:[255,200,120],bg:[.14,.06,.03],
     room:buildRoom([.22,.12,.07],[.17,.08,.04],[.25,.14,.09]),
     portals:[
-      {label:'A PACIFIER',col:[1.0,.70,.26],wx:-2.2,next:0},
-      {label:'A TOY',  col:[.58,.38,1.0],wx: 2.2,next:1},
+      {label:'A PACIFIER',col:[1.0,.70,.26],wx:-2.2,next:3},
+      {label:'A TOY',     col:[.58,.38,1.0],wx: 2.2,next:3},
     ],
   },
   {
-    title:'CHOOSE', titleCol:[255,160,180], bg:[.12,.04,.09],
+    title:'CHOOSE',titleCol:[255,160,180],bg:[.12,.04,.09],
     room:buildRoom([.20,.07,.15],[.16,.05,.11],[.24,.09,.19]),
     portals:[
-      {label:'MAMA',   col:[1.0,.32,.52],wx:-2.2,next:1},
-      {label:'PAPA', col:[.32,.66,1.0],wx: 2.2,next:2},
+      {label:'MAMA',col:[1.0,.32,.52],wx:-2.2,next:0},
+      {label:'PAPA',col:[.32,.66,1.0],wx: 2.2,next:0},
     ],
   },
 ];
@@ -384,8 +346,7 @@ SCENES.forEach(s=>{
   gl.bindBuffer(gl.ARRAY_BUFFER,s.vbo);
   gl.bufferData(gl.ARRAY_BUFFER,s.room.data,gl.STATIC_DRAW);
 });
-
-let sceneIdx=0, gTime=0, trans=false;
+let sceneIdx=0,gTime=0,trans=false;
 const player={x:0,z:1,facingX:0,moving:0,walkPhase:0};
 const keys={};
 window.addEventListener('keydown',e=>{
@@ -393,34 +354,31 @@ window.addEventListener('keydown',e=>{
   if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(e.key.toLowerCase())) e.preventDefault();
 });
 window.addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
-
 function getVP(){
   const proj=perspective(Math.PI/3.4,W/H,0.1,80);
   const eye=[player.x,7.5,player.z+10];
   const at=[player.x,0,player.z];
   return mul(proj,lookAt(eye,at));
 }
-
 function renderRoom(s,mvp){
   gl.useProgram(roomProg);
   gl.bindBuffer(gl.ARRAY_BUFFER,s.vbo);
   const aP=gl.getAttribLocation(roomProg,'a_pos');
   const aC=gl.getAttribLocation(roomProg,'a_col');
-  gl.enableVertexAttribArray(aP); gl.enableVertexAttribArray(aC);
+  gl.enableVertexAttribArray(aP);gl.enableVertexAttribArray(aC);
   gl.vertexAttribPointer(aP,3,gl.FLOAT,false,24,0);
   gl.vertexAttribPointer(aC,3,gl.FLOAT,false,24,12);
   gl.uniformMatrix4fv(u(roomProg,'u_mvp'),false,mvp);
   gl.uniform1f(u(roomProg,'u_jitter'),1.0);
   gl.drawArrays(gl.TRIANGLES,0,s.room.count);
 }
-
 const shadowBuf=gl.createBuffer();
 const N_SHADOW=28;
 function renderShadow(mvp){
   const verts=[];
   const fy=FLOOR_Y+0.02;
   for(let i=0;i<N_SHADOW;i++){
-    const a0=(i/N_SHADOW)*Math.PI*2, a1=((i+1)/N_SHADOW)*Math.PI*2;
+    const a0=(i/N_SHADOW)*Math.PI*2,a1=((i+1)/N_SHADOW)*Math.PI*2;
     verts.push(
       player.x,fy,player.z,.12,.10,.02,
       player.x+Math.cos(a0)*.75,fy,player.z+Math.sin(a0)*.38,.12,.10,.02,
@@ -432,20 +390,19 @@ function renderShadow(mvp){
   gl.useProgram(roomProg);
   const aP=gl.getAttribLocation(roomProg,'a_pos');
   const aC=gl.getAttribLocation(roomProg,'a_col');
-  gl.enableVertexAttribArray(aP); gl.enableVertexAttribArray(aC);
+  gl.enableVertexAttribArray(aP);gl.enableVertexAttribArray(aC);
   gl.vertexAttribPointer(aP,3,gl.FLOAT,false,24,0);
   gl.vertexAttribPointer(aC,3,gl.FLOAT,false,24,12);
   gl.uniformMatrix4fv(u(roomProg,'u_mvp'),false,mvp);
   gl.uniform1f(u(roomProg,'u_jitter'),0.0);
   gl.drawArrays(gl.TRIANGLES,0,N_SHADOW*3);
 }
-
 function renderBlob(mvp){
   uploadBlob(player.walkPhase,player.moving,player.facingX);
   const clip=projectW(mvp,player.x,FLOOR_Y,player.z);
   if(clip[3]<0.05) return;
   const w=clip[3];
-  const nx=clip[0]/w, ny=clip[1]/w;
+  const nx=clip[0]/w,ny=clip[1]/w;
   const proj=perspective(Math.PI/3.4,W/H,0.1,80);
   const scaleNDC=proj[5]/w;
   const blobRadius=1.2;
@@ -464,7 +421,6 @@ function renderBlob(mvp){
   gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
   gl.disable(gl.BLEND);
 }
-
 function portalNDC(mvp,wx){
   const wy=0.5,wz=PORTAL_Z,vr=PRT_WR*1.1;
   const cen=toNDC(mvp,wx,wy,wz);
@@ -473,12 +429,11 @@ function portalNDC(mvp,wx){
   if(!cen||!right||!top) return null;
   return{nx:cen[0],ny:cen[1],sx:Math.abs(right[0]-cen[0]),sy:Math.abs(top[1]-cen[1])};
 }
-
 function renderPortals(s,mvp){
-  gl.useProgram(prtProg); bindQuad(prtProg);
-  gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA,gl.ONE);
+  gl.useProgram(prtProg);bindQuad(prtProg);
+  gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE);
   s.portals.forEach(p=>{
-    const nd=portalNDC(mvp,p.wx); if(!nd) return;
+    const nd=portalNDC(mvp,p.wx);if(!nd) return;
     const pulse=Math.sin(gTime*2.2+p.wx)*.5+.5;
     gl.uniform2f(u(prtProg,'u_ctr'),nd.nx,nd.ny);
     gl.uniform2f(u(prtProg,'u_sz'),nd.sx,nd.sy);
@@ -488,16 +443,15 @@ function renderPortals(s,mvp){
   });
   gl.disable(gl.BLEND);
 }
-
 function renderOverlay(s,mvp){
   oc.clearRect(0,0,overlay.width,overlay.height);
   s.portals.forEach(p=>{
-    const nd=portalNDC(mvp,p.wx); if(!nd) return;
+    const nd=portalNDC(mvp,p.wx);if(!nd) return;
     const sx=(nd.nx*.5+.5)*overlay.width;
     const sy=(1-(nd.ny*.5+.5))*overlay.height;
     const c=p.col;
     oc.fillStyle=`rgba(${Math.round(c[0]*255)},${Math.round(c[1]*255)},${Math.round(c[2]*255)},.88)`;
-    oc.font='10px Courier New'; oc.letterSpacing='.15em'; oc.textAlign='center';
+    oc.font='10px Courier New';oc.letterSpacing='.15em';oc.textAlign='center';
     const jx=(Math.random()-.5)*1.5,jy=(Math.random()-.5)*1.5;
     oc.fillText(p.label,sx+jx,sy-44+jy);
     const dist=Math.hypot(player.x-p.wx,player.z-PORTAL_Z);
@@ -509,35 +463,32 @@ function renderOverlay(s,mvp){
     }
   });
 }
-
 function goToScene(next){
-  if(trans) return; trans=true;
+  if(trans) return;trans=true;
   fadeEl.style.opacity='1';
   setTimeout(()=>{
     sceneIdx=next;
-    player.x=0; player.z=1; player.facingX=0;
+    player.x=0;player.z=1;player.facingX=0;
     const s=SCENES[sceneIdx];
     setTimeout(()=>{
       fadeEl.style.opacity='0';
-      showTitle(s.title, s.titleCol);
-      setTimeout(()=>{ trans=false; }, (TITLE_IN_DUR+TITLE_HOLD_DUR)*1000);
+      showTitle(s.title,s.titleCol);
+      setTimeout(()=>{trans=false;},(TITLE_IN_DUR+TITLE_HOLD_DUR)*1000);
     },400);
   },750);
 }
-
-showTitle(SCENES[0].title, SCENES[0].titleCol);
-
+showTitle(SCENES[0].title,SCENES[0].titleCol);
 let last=0;
 function loop(ts){
   const dt=Math.min((ts-last)/1000,.05);
-  last=ts; gTime+=dt;
+  last=ts;gTime+=dt;
   const SPEED=4.5;
   let dx=0,dz=0;
   if(!trans&&birthDone){
-    if(keys['w']||keys['arrowup'])    dz-=1;
-    if(keys['s']||keys['arrowdown'])  dz+=1;
-    if(keys['a']||keys['arrowleft'])  dx-=1;
-    if(keys['d']||keys['arrowright']) dx+=1;
+    if(keys['w']||keys['arrowup'])   dz-=1;
+    if(keys['s']||keys['arrowdown']) dz+=1;
+    if(keys['a']||keys['arrowleft']) dx-=1;
+    if(keys['d']||keys['arrowright'])dx+=1;
   }
   const mv=dx!==0||dz!==0;
   if(mv){
@@ -548,7 +499,7 @@ function loop(ts){
   }
   player.x=Math.max(-RW+.5,Math.min(RW-.5,player.x));
   player.z=Math.max(-RD+.5,Math.min(RD-.5,player.z));
-  player.moving=mv ? Math.min(1,player.moving+dt*6) : Math.max(0,player.moving-dt*9);
+  player.moving=mv?Math.min(1,player.moving+dt*6):Math.max(0,player.moving-dt*9);
   if(mv) player.walkPhase=(player.walkPhase+dt*3)%1;
   if(!trans){
     SCENES[sceneIdx].portals.forEach(p=>{
