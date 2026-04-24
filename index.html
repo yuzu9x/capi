@@ -13,7 +13,7 @@
 <canvas id="c"></canvas>
 <canvas id="overlay"></canvas>
 <canvas id="title-canvas"></canvas>
-<div id="hint">WASD to walk · enter a portal</div>
+<div id="hint">WASD to walk · find the portal</div>
 <div id="fade"></div>
 <div id="heartbeat"></div>
 <div id="dim-overlay"></div>
@@ -21,140 +21,147 @@
 <script>
 'use strict';
 
-/* ─── BIRTH SEQUENCE ─────────────────────────────────────── */
-const birthEl=document.getElementById('birth');
-const birthLabel=document.getElementById('birth-label');
-const hintEl=document.getElementById('hint');
-const heartbeatEl=document.getElementById('heartbeat');
-const dimOverlay=document.getElementById('dim-overlay');
-let birthDone=false;
-hintEl.style.opacity='0';
+/* ════════════════════════════════════════════
+   BIRTH SEQUENCE
+════════════════════════════════════════════ */
+const birthEl    = document.getElementById('birth');
+const birthLabel = document.getElementById('birth-label');
+const hintEl     = document.getElementById('hint');
+const heartbeatEl= document.getElementById('heartbeat');
+const dimOverlay = document.getElementById('dim-overlay');
+let birthDone = false;
+hintEl.style.opacity = '0';
 
 (function runBirth(){
-  const bc=document.createElement('canvas');
-  const bctx=bc.getContext('2d');
-  bc.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;';
+  const bc = document.createElement('canvas');
+  const bctx = bc.getContext('2d');
+  bc.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;';
   birthEl.appendChild(bc);
-  let bw,bh;
-  function bResize(){bw=bc.width=innerWidth;bh=bc.height=innerHeight;}
-  window.addEventListener('resize',bResize);bResize();
-  const startTime=performance.now();
-  const TOTAL=4200;
+  let bw, bh;
+  function bResize(){ bw = bc.width = innerWidth; bh = bc.height = innerHeight; }
+  window.addEventListener('resize', bResize); bResize();
+  const startTime = performance.now();
+  const TOTAL = 4200;
   function drawBirth(ts){
-    const t=Math.min((ts-startTime)/TOTAL,1);
+    const t = Math.min((ts - startTime) / TOTAL, 1);
     bctx.clearRect(0,0,bw,bh);
-    bctx.fillStyle='#fff';bctx.fillRect(0,0,bw,bh);
-    const cx=bw/2,cy=bh/2,maxR=Math.min(bh,bw)*.18;
-    const ease=t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
-    const r=ease*maxR;
-    const haloR=r*(1.5+Math.sin(ts/220)*.12);
-    const halo=bctx.createRadialGradient(cx,cy,r*.8,cx,cy,haloR);
-    halo.addColorStop(0,`rgba(255,220,0,${.22*t})`);halo.addColorStop(1,'rgba(255,220,0,0)');
-    bctx.fillStyle=halo;bctx.beginPath();bctx.arc(cx,cy,haloR,0,Math.PI*2);bctx.fill();
-    const g=bctx.createRadialGradient(cx-r*.25,cy-r*.25,r*.05,cx,cy,r);
-    g.addColorStop(0,'rgba(255,255,210,1)');g.addColorStop(.3,'rgba(255,230,30,1)');
-    g.addColorStop(.75,'rgba(220,170,0,1)');g.addColorStop(1,'rgba(180,120,0,.92)');
-    bctx.fillStyle=g;bctx.beginPath();bctx.arc(cx,cy,r,0,Math.PI*2);bctx.fill();
+    bctx.fillStyle = '#fff'; bctx.fillRect(0,0,bw,bh);
+    const cx = bw/2, cy = bh/2, maxR = Math.min(bh,bw)*.18;
+    const ease = t<.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2;
+    const r = ease * maxR;
+    const haloR = r*(1.5+Math.sin(ts/220)*.12);
+    const halo = bctx.createRadialGradient(cx,cy,r*.8,cx,cy,haloR);
+    halo.addColorStop(0,`rgba(255,220,0,${.22*t})`); halo.addColorStop(1,'rgba(255,220,0,0)');
+    bctx.fillStyle = halo; bctx.beginPath(); bctx.arc(cx,cy,haloR,0,Math.PI*2); bctx.fill();
+    const g = bctx.createRadialGradient(cx-r*.25,cy-r*.25,r*.05,cx,cy,r);
+    g.addColorStop(0,'rgba(255,255,210,1)'); g.addColorStop(.3,'rgba(255,230,30,1)');
+    g.addColorStop(.75,'rgba(220,170,0,1)'); g.addColorStop(1,'rgba(180,120,0,.92)');
+    bctx.fillStyle = g; bctx.beginPath(); bctx.arc(cx,cy,r,0,Math.PI*2); bctx.fill();
     if(r>4){
-      const sp=bctx.createRadialGradient(cx-r*.3,cy-r*.3,0,cx-r*.3,cy-r*.3,r*.45);
-      sp.addColorStop(0,'rgba(255,255,255,.7)');sp.addColorStop(1,'rgba(255,255,255,0)');
-      bctx.fillStyle=sp;bctx.beginPath();bctx.arc(cx-r*.3,cy-r*.3,r*.4,0,Math.PI*2);bctx.fill();
+      const sp = bctx.createRadialGradient(cx-r*.3,cy-r*.3,0,cx-r*.3,cy-r*.3,r*.45);
+      sp.addColorStop(0,'rgba(255,255,255,.7)'); sp.addColorStop(1,'rgba(255,255,255,0)');
+      bctx.fillStyle = sp; bctx.beginPath(); bctx.arc(cx-r*.3,cy-r*.3,r*.4,0,Math.PI*2); bctx.fill();
     }
-    if(t>.55){const la=Math.min(1,(t-.55)/.3);birthLabel.style.color=`rgba(80,60,0,${la})`;}
-    if(t<1){requestAnimationFrame(drawBirth);}
+    if(t>.55){ const la = Math.min(1,(t-.55)/.3); birthLabel.style.color=`rgba(80,60,0,${la})`; }
+    if(t<1){ requestAnimationFrame(drawBirth); }
     else{
       setTimeout(()=>{
-        birthEl.style.transition='opacity .9s';birthEl.style.opacity='0';
-        birthLabel.style.transition='opacity .9s';birthLabel.style.opacity='0';
+        birthEl.style.transition = 'opacity .9s'; birthEl.style.opacity = '0';
+        birthLabel.style.transition = 'opacity .9s'; birthLabel.style.opacity = '0';
         setTimeout(()=>{
-          birthEl.remove();birthLabel.remove();birthDone=true;
-          hintEl.style.transition='opacity 1s';hintEl.style.opacity='1';
-          window.removeEventListener('resize',bResize);
-        },900);
-      },700);
+          birthEl.remove(); birthLabel.remove(); birthDone = true;
+          hintEl.style.transition = 'opacity 1s'; hintEl.style.opacity = '1';
+          window.removeEventListener('resize', bResize);
+        }, 900);
+      }, 700);
     }
   }
   requestAnimationFrame(drawBirth);
 })();
 
-/* ─── TITLE CANVAS ───────────────────────────────────────── */
-const titleCanvas=document.getElementById('title-canvas');
-const tc=titleCanvas.getContext('2d');
-const offC=document.createElement('canvas');
-const off=offC.getContext('2d');
-function resizeTitleCanvas(){titleCanvas.width=innerWidth;titleCanvas.height=innerHeight;}
-window.addEventListener('resize',resizeTitleCanvas);resizeTitleCanvas();
-const titleAnim={active:false,text:'',phase:'idle',t:0,color:[255,255,255]};
-const TITLE_IN_DUR=1.1,TITLE_HOLD_DUR=1.6,TITLE_OUT_DUR=1.2;
-function pixelSize(t,phase){
-  if(phase==='in') return Math.round(1+(1-t)*(1-t)*38);
+/* ════════════════════════════════════════════
+   TITLE CANVAS
+════════════════════════════════════════════ */
+const titleCanvas = document.getElementById('title-canvas');
+const tc = titleCanvas.getContext('2d');
+const offC = document.createElement('canvas');
+const off  = offC.getContext('2d');
+function resizeTitleCanvas(){ titleCanvas.width = innerWidth; titleCanvas.height = innerHeight; }
+window.addEventListener('resize', resizeTitleCanvas); resizeTitleCanvas();
+const titleAnim = { active:false, text:'', phase:'idle', t:0, color:[255,255,255] };
+const TITLE_IN_DUR=1.1, TITLE_HOLD_DUR=1.6, TITLE_OUT_DUR=1.2;
+function pixelSize(t, phase){
+  if(phase==='in')   return Math.round(1+(1-t)*(1-t)*38);
   if(phase==='hold') return 1;
-  if(phase==='out') return Math.round(1+t*t*52);
+  if(phase==='out')  return Math.round(1+t*t*52);
   return 1;
 }
-function renderTitleFrame(text,px,alpha,col){
-  const TW=titleCanvas.width,TH=titleCanvas.height;
+function renderTitleFrame(text, px, alpha, col){
+  const TW = titleCanvas.width, TH = titleCanvas.height;
   tc.clearRect(0,0,TW,TH);
   if(alpha<=0||px<=0) return;
-  const fs=Math.min(TW*.09,110);
-  offC.width=TW;offC.height=TH;
+  const fs = Math.min(TW*.09,110);
+  offC.width = TW; offC.height = TH;
   off.clearRect(0,0,TW,TH);
-  off.fillStyle=`rgb(${col[0]},${col[1]},${col[2]})`;
-  off.font=`300 ${fs}px 'Courier New',monospace`;
-  off.letterSpacing='0.35em';
-  off.textAlign='center';off.textBaseline='middle';
-  off.fillText(text,TW/2,TH/2);
-  if(px<=1){tc.globalAlpha=alpha;tc.drawImage(offC,0,0);tc.globalAlpha=1;return;}
-  const sw=Math.max(1,Math.floor(TW/px)),sh=Math.max(1,Math.floor(TH/px));
-  const tmp=document.createElement('canvas');
-  tmp.width=sw;tmp.height=sh;
-  const tctx=tmp.getContext('2d');
-  tctx.imageSmoothingEnabled=false;tctx.drawImage(offC,0,0,sw,sh);
-  tc.globalAlpha=alpha;tc.imageSmoothingEnabled=false;
-  tc.drawImage(tmp,0,0,TW,TH);tc.globalAlpha=1;
+  off.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
+  off.font = `300 ${fs}px 'Courier New',monospace`;
+  off.letterSpacing = '0.35em';
+  off.textAlign = 'center'; off.textBaseline = 'middle';
+  off.fillText(text, TW/2, TH/2);
+  if(px<=1){ tc.globalAlpha=alpha; tc.drawImage(offC,0,0); tc.globalAlpha=1; return; }
+  const sw = Math.max(1,Math.floor(TW/px)), sh = Math.max(1,Math.floor(TH/px));
+  const tmp = document.createElement('canvas'); tmp.width=sw; tmp.height=sh;
+  const tctx = tmp.getContext('2d');
+  tctx.imageSmoothingEnabled=false; tctx.drawImage(offC,0,0,sw,sh);
+  tc.globalAlpha=alpha; tc.imageSmoothingEnabled=false;
+  tc.drawImage(tmp,0,0,TW,TH); tc.globalAlpha=1;
 }
-function showTitle(text,col){
-  titleAnim.text=text;titleAnim.color=col||[255,255,255];
-  titleAnim.phase='in';titleAnim.t=0;titleAnim.active=true;
+function showTitle(text, col){
+  titleAnim.text=text; titleAnim.color=col||[255,255,255];
+  titleAnim.phase='in'; titleAnim.t=0; titleAnim.active=true;
 }
 function updateTitle(dt){
-  if(!titleAnim.active){tc.clearRect(0,0,titleCanvas.width,titleCanvas.height);return;}
-  const ph=titleAnim.phase;
-  titleAnim.t+=dt/(ph==='in'?TITLE_IN_DUR:ph==='hold'?TITLE_HOLD_DUR:TITLE_OUT_DUR);
+  if(!titleAnim.active){ tc.clearRect(0,0,titleCanvas.width,titleCanvas.height); return; }
+  const ph = titleAnim.phase;
+  titleAnim.t += dt/(ph==='in'?TITLE_IN_DUR:ph==='hold'?TITLE_HOLD_DUR:TITLE_OUT_DUR);
   if(titleAnim.t>=1){
     titleAnim.t=0;
     if(ph==='in') titleAnim.phase='hold';
     else if(ph==='hold') titleAnim.phase='out';
-    else{titleAnim.active=false;tc.clearRect(0,0,titleCanvas.width,titleCanvas.height);return;}
+    else{ titleAnim.active=false; tc.clearRect(0,0,titleCanvas.width,titleCanvas.height); return; }
   }
-  const t=titleAnim.t,ph2=titleAnim.phase;
+  const t=titleAnim.t, ph2=titleAnim.phase;
   const px=pixelSize(t,ph2);
   let alpha;
-  if(ph2==='in') alpha=t<0.3?t/0.3:1;
-  else if(ph2==='hold') alpha=1;
-  else alpha=1-t;
+  if(ph2==='in')        alpha = t<0.3?t/0.3:1;
+  else if(ph2==='hold') alpha = 1;
+  else                  alpha = 1-t;
   renderTitleFrame(titleAnim.text,px,alpha,titleAnim.color);
 }
 
-/* ─── WEBGL SETUP ────────────────────────────────────────── */
-const canvas=document.getElementById('c');
-const overlay=document.getElementById('overlay');
-const oc=overlay.getContext('2d');
-const gl=canvas.getContext('webgl',{antialias:false});
-const fadeEl=document.getElementById('fade');
-let W,H;
+/* ════════════════════════════════════════════
+   WEBGL SETUP
+════════════════════════════════════════════ */
+const canvas  = document.getElementById('c');
+const overlay = document.getElementById('overlay');
+const oc      = overlay.getContext('2d');
+const gl      = canvas.getContext('webgl',{antialias:false});
+const fadeEl  = document.getElementById('fade');
+let W, H;
 function resize(){
-  W=Math.floor(innerWidth/2);H=Math.floor(innerHeight/2);
-  canvas.width=W;canvas.height=H;
-  canvas.style.width=innerWidth+'px';canvas.style.height=innerHeight+'px';
-  overlay.width=innerWidth;overlay.height=innerHeight;
+  W = Math.floor(innerWidth/2); H = Math.floor(innerHeight/2);
+  canvas.width=W; canvas.height=H;
+  canvas.style.width=innerWidth+'px'; canvas.style.height=innerHeight+'px';
+  overlay.width=innerWidth; overlay.height=innerHeight;
   gl.viewport(0,0,W,H);
 }
-window.addEventListener('resize',resize);resize();
+window.addEventListener('resize',resize); resize();
 
-/* ─── SHADER HELPERS ─────────────────────────────────────── */
+/* ════════════════════════════════════════════
+   SHADER HELPERS
+════════════════════════════════════════════ */
 function mkShader(t,src){
-  const s=gl.createShader(t);gl.shaderSource(s,src);gl.compileShader(s);
+  const s=gl.createShader(t); gl.shaderSource(s,src); gl.compileShader(s);
   if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(s));
   return s;
 }
@@ -162,35 +169,35 @@ function mkProg(vs,fs){
   const p=gl.createProgram();
   gl.attachShader(p,mkShader(gl.VERTEX_SHADER,vs));
   gl.attachShader(p,mkShader(gl.FRAGMENT_SHADER,fs));
-  gl.linkProgram(p);return p;
+  gl.linkProgram(p); return p;
 }
-function u(p,n){return gl.getUniformLocation(p,n);}
-function m4(){return new Float32Array(16);}
+function u(p,n){ return gl.getUniformLocation(p,n); }
+function m4(){ return new Float32Array(16); }
 function mul(a,b){
   const r=m4();
   for(let i=0;i<4;i++) for(let j=0;j<4;j++){
-    let v=0;for(let k=0;k<4;k++) v+=a[i+k*4]*b[k+j*4];r[i+j*4]=v;
+    let v=0; for(let k=0;k<4;k++) v+=a[i+k*4]*b[k+j*4]; r[i+j*4]=v;
   }
   return r;
 }
 function perspective(fov,asp,n,f){
-  const mm=m4(),t=1/Math.tan(fov*.5);
-  mm[0]=t/asp;mm[5]=t;mm[10]=(f+n)/(n-f);mm[11]=-1;mm[14]=2*f*n/(n-f);return mm;
+  const mm=m4(), t=1/Math.tan(fov*.5);
+  mm[0]=t/asp; mm[5]=t; mm[10]=(f+n)/(n-f); mm[11]=-1; mm[14]=2*f*n/(n-f); return mm;
 }
 function lookAt(eye,at){
   const up=[0,1,0];
-  const z=norm(sub3(eye,at)),x=norm(cross(up,z)),y=cross(z,x);
+  const z=norm(sub3(eye,at)), x=norm(cross(up,z)), y=cross(z,x);
   const mm=m4();
-  mm[0]=x[0];mm[4]=x[1];mm[8]=x[2];
-  mm[1]=y[0];mm[5]=y[1];mm[9]=y[2];
-  mm[2]=z[0];mm[6]=z[1];mm[10]=z[2];
-  mm[12]=-dot(x,eye);mm[13]=-dot(y,eye);mm[14]=-dot(z,eye);mm[15]=1;
+  mm[0]=x[0]; mm[4]=x[1]; mm[8]=x[2];
+  mm[1]=y[0]; mm[5]=y[1]; mm[9]=y[2];
+  mm[2]=z[0]; mm[6]=z[1]; mm[10]=z[2];
+  mm[12]=-dot(x,eye); mm[13]=-dot(y,eye); mm[14]=-dot(z,eye); mm[15]=1;
   return mm;
 }
-function sub3(a,b){return[a[0]-b[0],a[1]-b[1],a[2]-b[2]];}
-function dot(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];}
-function cross(a,b){return[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];}
-function norm(v){const l=Math.hypot(...v)||1;return v.map(x=>x/l);}
+function sub3(a,b){ return[a[0]-b[0],a[1]-b[1],a[2]-b[2]]; }
+function dot(a,b){ return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]; }
+function cross(a,b){ return[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]]; }
+function norm(v){ const l=Math.hypot(...v)||1; return v.map(x=>x/l); }
 function projectW(mvp,wx,wy,wz){
   return[
     mvp[0]*wx+mvp[4]*wy+mvp[8]*wz+mvp[12],
@@ -205,29 +212,31 @@ function toNDC(mvp,wx,wy,wz){
   return[c[0]/c[3],c[1]/c[3]];
 }
 
-/* ─── SHADERS ────────────────────────────────────────────── */
+/* ════════════════════════════════════════════
+   SHADERS
+════════════════════════════════════════════ */
 const ROOM_VS=`
 precision mediump float;
-attribute vec3 a_pos;attribute vec3 a_col;
-uniform mat4 u_mvp;uniform float u_jitter;
+attribute vec3 a_pos; attribute vec3 a_col;
+uniform mat4 u_mvp; uniform float u_jitter;
 varying vec3 v_col;
 void main(){
   vec4 clip=u_mvp*vec4(a_pos,1.0);
   float g=80.0*u_jitter;
   clip.xy=floor(clip.xy*g+0.5)/g;
-  gl_Position=clip;v_col=a_col;
+  gl_Position=clip; v_col=a_col;
 }`;
 const ROOM_FS=`
-precision mediump float;varying vec3 v_col;
-void main(){gl_FragColor=vec4(v_col,1.0);}`;
+precision mediump float; varying vec3 v_col;
+void main(){ gl_FragColor=vec4(v_col,1.0); }`;
 const roomProg=mkProg(ROOM_VS,ROOM_FS);
 
 const SPR_VS=`
 precision mediump float;
-attribute vec2 a_pos;uniform vec2 u_ctr,u_sz;varying vec2 v_uv;
-void main(){v_uv=a_pos*.5+.5;gl_Position=vec4(u_ctr+a_pos*u_sz,0.,1.);}`;
+attribute vec2 a_pos; uniform vec2 u_ctr,u_sz; varying vec2 v_uv;
+void main(){ v_uv=a_pos*.5+.5; gl_Position=vec4(u_ctr+a_pos*u_sz,0.,1.); }`;
 const SPR_FS=`
-precision mediump float;varying vec2 v_uv;uniform sampler2D u_tex;
+precision mediump float; varying vec2 v_uv; uniform sampler2D u_tex;
 void main(){
   vec4 c=texture2D(u_tex,v_uv);
   if(c.a<.05) discard;
@@ -237,11 +246,11 @@ const sprProg=mkProg(SPR_VS,SPR_FS);
 
 const PRT_VS=`
 precision mediump float;
-attribute vec2 a_pos;uniform vec2 u_ctr,u_sz;varying vec2 v_uv;
-void main(){v_uv=a_pos;gl_Position=vec4(a_pos*u_sz+u_ctr,0.,1.);}`;
+attribute vec2 a_pos; uniform vec2 u_ctr,u_sz; varying vec2 v_uv;
+void main(){ v_uv=a_pos; gl_Position=vec4(a_pos*u_sz+u_ctr,0.,1.); }`;
 const PRT_FS=`
-precision mediump float;varying vec2 v_uv;
-uniform vec3 u_col;uniform float u_pulse;
+precision mediump float; varying vec2 v_uv;
+uniform vec3 u_col; uniform float u_pulse;
 void main(){
   float d=length(v_uv);
   if(d>1.0) discard;
@@ -262,10 +271,11 @@ function bindQuad(prog){
   gl.vertexAttribPointer(a,2,gl.FLOAT,false,0,0);
 }
 
-/* ─── BLOB SPRITE ─────────────────────────────────────────── */
+/* ════════════════════════════════════════════
+   BLOB SPRITE
+════════════════════════════════════════════ */
 const BC=128;
-const blobC=document.createElement('canvas');
-blobC.width=blobC.height=BC;
+const blobC=document.createElement('canvas'); blobC.width=blobC.height=BC;
 const b2=blobC.getContext('2d');
 const blobTex=gl.createTexture();
 gl.bindTexture(gl.TEXTURE_2D,blobTex);
@@ -274,29 +284,30 @@ gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
 gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
 gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
 
-// capiScale grows from 1.0 as rooms accumulate
 let capiScale=1.0;
 
 function paintBlob(phase,moveAmt,facingX){
   b2.clearRect(0,0,BC,BC);
-  const cx=BC/2,cy=BC*.50,rx=30,ry=26;
+  const cx=BC/2, cy=BC*.50, rx=30, ry=26;
   const bob=Math.sin(phase*Math.PI*2)*moveAmt*3.5;
   const sqX=1+Math.cos(phase*Math.PI*2)*moveAmt*.06;
   const sqY=1-Math.cos(phase*Math.PI*2)*moveAmt*.06;
   const aura=b2.createRadialGradient(cx,cy+bob,0,cx,cy+bob,rx*1.9);
-  aura.addColorStop(0,'rgba(255,200,0,.18)');aura.addColorStop(1,'rgba(0,0,0,0)');
-  b2.fillStyle=aura;b2.beginPath();b2.ellipse(cx,cy+bob,rx*1.9,ry*1.9,0,0,Math.PI*2);b2.fill();
+  aura.addColorStop(0,'rgba(255,200,0,.18)'); aura.addColorStop(1,'rgba(0,0,0,0)');
+  b2.fillStyle=aura; b2.beginPath(); b2.ellipse(cx,cy+bob,rx*1.9,ry*1.9,0,0,Math.PI*2); b2.fill();
   const bg=b2.createRadialGradient(cx-rx*.2,cy+bob-ry*.2,2,cx,cy+bob,rx*1.1);
-  bg.addColorStop(0,'rgba(255,255,210,1)');bg.addColorStop(.3,'rgba(255,228,30,1)');
-  bg.addColorStop(.72,'rgba(230,175,0,1)');bg.addColorStop(1,'rgba(180,120,0,.9)');
-  b2.fillStyle=bg;b2.beginPath();b2.ellipse(cx,cy+bob,rx*sqX,ry*sqY,0,0,Math.PI*2);b2.fill();
+  bg.addColorStop(0,'rgba(255,255,210,1)'); bg.addColorStop(.3,'rgba(255,228,30,1)');
+  bg.addColorStop(.72,'rgba(230,175,0,1)'); bg.addColorStop(1,'rgba(180,120,0,.9)');
+  b2.fillStyle=bg; b2.beginPath(); b2.ellipse(cx,cy+bob,rx*sqX,ry*sqY,0,0,Math.PI*2); b2.fill();
   const sp=b2.createRadialGradient(cx-10,cy+bob-10,1,cx-10,cy+bob-10,15);
-  sp.addColorStop(0,'rgba(255,255,255,.80)');sp.addColorStop(.6,'rgba(255,255,255,.10)');sp.addColorStop(1,'rgba(255,255,255,0)');
-  b2.fillStyle=sp;b2.beginPath();b2.ellipse(cx-10,cy+bob-10,12,8,-.3,0,Math.PI*2);b2.fill();
-  const esh=facingX*5,ey=cy+bob-4;
+  sp.addColorStop(0,'rgba(255,255,255,.80)');
+  sp.addColorStop(.6,'rgba(255,255,255,.10)');
+  sp.addColorStop(1,'rgba(255,255,255,0)');
+  b2.fillStyle=sp; b2.beginPath(); b2.ellipse(cx-10,cy+bob-10,12,8,-.3,0,Math.PI*2); b2.fill();
+  const esh=facingX*5, ey=cy+bob-4;
   [cx-7+esh,cx+7+esh].forEach(ex=>{
-    b2.fillStyle='rgba(6,18,60,.9)';b2.beginPath();b2.ellipse(ex,ey,3.2,3.2,0,0,Math.PI*2);b2.fill();
-    b2.fillStyle='rgba(255,255,255,.88)';b2.beginPath();b2.ellipse(ex-1,ey-1,1.1,1.1,0,0,Math.PI*2);b2.fill();
+    b2.fillStyle='rgba(6,18,60,.9)'; b2.beginPath(); b2.ellipse(ex,ey,3.2,3.2,0,0,Math.PI*2); b2.fill();
+    b2.fillStyle='rgba(255,255,255,.88)'; b2.beginPath(); b2.ellipse(ex-1,ey-1,1.1,1.1,0,0,Math.PI*2); b2.fill();
   });
 }
 function uploadBlob(phase,moveAmt,facingX){
@@ -305,8 +316,10 @@ function uploadBlob(phase,moveAmt,facingX){
   gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,blobC);
 }
 
-/* ─── ROOM GEOMETRY ──────────────────────────────────────── */
-const RW=4.5,RH=2.5,RD=6;
+/* ════════════════════════════════════════════
+   ROOM GEOMETRY
+════════════════════════════════════════════ */
+const RW=4.5, RH=2.5, RD=6;
 const FLOOR_Y=-RH;
 const PORTAL_Z=-(RD-0.1);
 const PORTAL_WORLD_R=0.85;
@@ -314,175 +327,189 @@ const PRT_WR=0.80;
 
 function buildRoom(floorC,wallC,ceilC){
   const verts=[];
-  function quad(a,b,c,d,col){[a,b,c,a,c,d].forEach(p=>verts.push(...p,...col));}
-  const fl=floorC.map(v=>Math.min(1,v*1.15));
-  quad([-RW,FLOOR_Y,-RD],[RW,FLOOR_Y,-RD],[RW,FLOOR_Y,RD],[-RW,FLOOR_Y,RD],fl);
-  const ce=ceilC.map(v=>v*.85);
-  quad([-RW,RH,-RD],[-RW,RH,RD],[RW,RH,RD],[RW,RH,-RD],ce);
-  const bw=wallC.map(v=>Math.min(1,v*1.3));
-  quad([-RW,FLOOR_Y,-RD],[RW,FLOOR_Y,-RD],[RW,RH,-RD],[-RW,RH,-RD],bw);
-  const fw=wallC.map(v=>v*.55);
-  quad([-RW,FLOOR_Y,RD],[-RW,RH,RD],[RW,RH,RD],[RW,FLOOR_Y,RD],fw);
-  const lw=wallC.map((v,i)=>i===0?Math.min(1,v*1.2):v*.95);
-  quad([-RW,FLOOR_Y,-RD],[-RW,RH,-RD],[-RW,RH,RD],[-RW,FLOOR_Y,RD],lw);
-  const rw=wallC.map(v=>v*.78);
-  quad([RW,FLOOR_Y,-RD],[RW,FLOOR_Y,RD],[RW,RH,RD],[RW,RH,-RD],rw);
-  return{data:new Float32Array(verts),count:verts.length/6};
+  function quad(a,b,c,d,col){ [a,b,c,a,c,d].forEach(p=>verts.push(...p,...col)); }
+  quad([-RW,FLOOR_Y,-RD],[RW,FLOOR_Y,-RD],[RW,FLOOR_Y,RD],[-RW,FLOOR_Y,RD], floorC.map(v=>Math.min(1,v*1.15)));
+  quad([-RW,RH,-RD],[-RW,RH,RD],[RW,RH,RD],[RW,RH,-RD], ceilC.map(v=>v*.85));
+  quad([-RW,FLOOR_Y,-RD],[RW,FLOOR_Y,-RD],[RW,RH,-RD],[-RW,RH,-RD], wallC.map(v=>Math.min(1,v*1.3)));
+  quad([-RW,FLOOR_Y,RD],[-RW,RH,RD],[RW,RH,RD],[RW,FLOOR_Y,RD], wallC.map(v=>v*.55));
+  quad([-RW,FLOOR_Y,-RD],[-RW,RH,-RD],[-RW,RH,RD],[-RW,FLOOR_Y,RD], wallC.map((v,i)=>i===0?Math.min(1,v*1.2):v*.95));
+  quad([RW,FLOOR_Y,-RD],[RW,FLOOR_Y,RD],[RW,RH,RD],[RW,RH,-RD], wallC.map(v=>v*.78));
+  return{data:new Float32Array(verts), count:verts.length/6};
 }
 
-/* ─── SCENE DEFINITIONS ──────────────────────────────────── */
-// roomsVisited counts every transition (not index), used for dim + heartbeat
+/* ════════════════════════════════════════════
+   PORTAL RANDOMISATION
+   7 possible X slots along the back wall.
+   Each scene entry shuffles which slots get portals,
+   seeded on (sceneIdx + roomsVisited) so it changes
+   every visit but is deterministic per-run.
+════════════════════════════════════════════ */
+const SLOT_POOL=[-3.8,-2.6,-1.4,0,1.4,2.6,3.8];
+
+function makeLCG(seed){
+  let s=seed>>>0;
+  return function(){ s=(1664525*s+1013904223)>>>0; return s/4294967296; };
+}
+
+function randomSlots(n, seed){
+  const rng=makeLCG(seed);
+  const pool=[...SLOT_POOL];
+  for(let i=pool.length-1;i>0;i--){
+    const j=Math.floor(rng()*(i+1));
+    [pool[i],pool[j]]=[pool[j],pool[i]];
+  }
+  return pool.slice(0,n);
+}
+
+/* ════════════════════════════════════════════
+   30 SCENE BLUEPRINTS  (index 0-29 + ending at 30)
+   room: [floorRGB, wallRGB, ceilRGB]
+   portals: array of {label, col} — X assigned at entry
+════════════════════════════════════════════ */
 let roomsVisited=0;
 
-const SCENES=[
-  {
-    title:'THE BEGINNING',titleCol:[255,255,255],bg:[.05,.07,.14],
-    room:buildRoom([.93,.14,.24],[.09,.10,.18],[.16,.15,.26]),
-    portals:[
-      {label:'ENTER THE LIGHT',col:[.92,.68,1.0],wx:0,next:1},
-    ],
-  },
-  {
-    title:'OUR FIRST STEPS',titleCol:[180,255,200],bg:[.03,.10,.07],
-    room:buildRoom([.09,.18,.13],[.07,.13,.09],[.12,.20,.16]),
-    portals:[
-      {label:'SURRENDER',col:[.42,.98,.68],wx:-2.2,next:2},
-      {label:'CRAWL',    col:[.78,.84,1.0],wx: 2.2,next:2},
-    ],
-  },
-  {
-    title:'EARLY TERRITORY',titleCol:[255,200,120],bg:[.14,.06,.03],
-    room:buildRoom([.22,.12,.07],[.17,.08,.04],[.25,.14,.09]),
-    portals:[
-      {label:'A PACIFIER',col:[1.0,.70,.26],wx:-2.2,next:3},
-      {label:'A TOY',     col:[.58,.38,1.0],wx: 2.2,next:3},
-    ],
-  },
-  {
-    title:'CHOOSE',titleCol:[255,160,180],bg:[.12,.04,.09],
-    room:buildRoom([.20,.07,.15],[.16,.05,.11],[.24,.09,.19]),
-    portals:[
-      {label:'MAMA',col:[1.0,.32,.52],wx:-2.2,next:4},
-      {label:'PAPA',col:[.32,.66,1.0],wx: 2.2,next:4},
-    ],
-  },
-  {
-    title:'THE WEIGHT OF IT',titleCol:[200,180,255],bg:[.08,.05,.18],
-    room:buildRoom([.15,.10,.28],[.12,.08,.22],[.18,.12,.30]),
-    portals:[
-      {label:'REMEMBER',col:[.70,.50,1.0],wx:-2.2,next:5},
-      {label:'FORGET',  col:[.40,.30,.80],wx: 2.2,next:5},
-    ],
-  },
-  {
-    title:'ALMOST THERE',titleCol:[255,220,180],bg:[.10,.08,.06],
-    room:buildRoom([.18,.14,.10],[.14,.10,.07],[.20,.16,.12]),
-    portals:[
-      {label:'ONE MORE STEP',col:[.90,.75,.40],wx:0,next:6},
-    ],
-  },
-  // Scene 6 is the ending void — handled separately below
-  {
-    title:'',titleCol:[255,255,255],bg:[0,0,0],
-    isEnding:true,
-    room:buildRoom([.01,.01,.01],[.01,.01,.01],[.01,.01,.01]),
-    portals:[],
-  },
+const BLUEPRINTS=[
+  /* 00 */ {title:'THE BEGINNING',         titleCol:[255,255,255], bg:[.05,.07,.14], room:[[.93,.14,.24],[.09,.10,.18],[.16,.15,.26]], portals:[{label:'ENTER THE LIGHT',col:[.92,.68,1.0]}]},
+  /* 01 */ {title:'FIRST BREATH',          titleCol:[200,255,220], bg:[.03,.10,.07], room:[[.09,.18,.13],[.07,.13,.09],[.12,.20,.16]], portals:[{label:'INHALE',col:[.42,.98,.68]},{label:'EXHALE',col:[.78,.84,1.0]}]},
+  /* 02 */ {title:'EARLY TERRITORY',       titleCol:[255,200,120], bg:[.14,.06,.03], room:[[.22,.12,.07],[.17,.08,.04],[.25,.14,.09]], portals:[{label:'A PACIFIER',col:[1.0,.70,.26]},{label:'A TOY',col:[.58,.38,1.0]},{label:'A SOUND',col:[.80,.60,.20]}]},
+  /* 03 */ {title:'CHOOSE',                titleCol:[255,160,180], bg:[.12,.04,.09], room:[[.20,.07,.15],[.16,.05,.11],[.24,.09,.19]], portals:[{label:'MAMA',col:[1.0,.32,.52]},{label:'PAPA',col:[.32,.66,1.0]}]},
+  /* 04 */ {title:'THE WEIGHT OF IT',      titleCol:[200,180,255], bg:[.08,.05,.18], room:[[.15,.10,.28],[.12,.08,.22],[.18,.12,.30]], portals:[{label:'REMEMBER',col:[.70,.50,1.0]},{label:'FORGET',col:[.40,.30,.80]},{label:'HOLD',col:[.90,.70,1.0]}]},
+  /* 05 */ {title:'FIRST FALL',            titleCol:[255,220,180], bg:[.10,.08,.06], room:[[.18,.14,.10],[.14,.10,.07],[.20,.16,.12]], portals:[{label:'GET UP',col:[.90,.75,.40]},{label:'STAY DOWN',col:[.50,.40,.20]}]},
+  /* 06 */ {title:'THE ROOM THEY MADE',    titleCol:[180,230,255], bg:[.04,.08,.14], room:[[.07,.11,.20],[.05,.09,.16],[.09,.13,.24]], portals:[{label:'YELLOW DOOR',col:[1.0,.90,.20]},{label:'BLUE WINDOW',col:[.20,.70,1.0]},{label:'WHITE WALL',col:[.90,.90,.90]}]},
+  /* 07 */ {title:'A NAME GIVEN',          titleCol:[255,240,200], bg:[.12,.10,.05], room:[[.20,.16,.08],[.16,.12,.06],[.24,.20,.10]], portals:[{label:'ACCEPT IT',col:[.95,.80,.30]},{label:'RESIST IT',col:[.70,.50,.10]}]},
+  /* 08 */ {title:'LANGUAGE ARRIVES',      titleCol:[200,255,240], bg:[.03,.12,.10], room:[[.08,.18,.15],[.06,.14,.11],[.10,.22,.18]], portals:[{label:'WORD',col:[.30,.90,.70]},{label:'SILENCE',col:[.20,.60,.50]},{label:'CRY',col:[.80,.40,.40]}]},
+  /* 09 */ {title:'THE MIRROR',            titleCol:[220,220,255], bg:[.06,.06,.16], room:[[.12,.12,.24],[.09,.09,.18],[.15,.15,.28]], portals:[{label:'LOOK CLOSER',col:[.70,.70,1.0]},{label:'LOOK AWAY',col:[.40,.40,.70]}]},
+  /* 10 */ {title:'FIRST LIE',             titleCol:[255,180,160], bg:[.14,.05,.05], room:[[.22,.08,.08],[.16,.06,.06],[.26,.10,.10]], portals:[{label:'IT WAS NOTHING',col:[.90,.40,.40]},{label:'IT MATTERED',col:[.60,.20,.20]},{label:'FORGET IT',col:[1.0,.60,.60]}]},
+  /* 11 */ {title:'SOMEONE LEAVES',        titleCol:[180,180,200], bg:[.07,.07,.12], room:[[.12,.12,.20],[.09,.09,.16],[.14,.14,.22]], portals:[{label:'WAVE GOODBYE',col:[.60,.60,.80]},{label:'FOLLOW THEM',col:[.40,.40,.60]}]},
+  /* 12 */ {title:'THE OUTSIDE',           titleCol:[180,255,180], bg:[.04,.12,.04], room:[[.08,.20,.08],[.06,.16,.06],[.10,.24,.10]], portals:[{label:'RUN',col:[.30,.90,.30]},{label:'WATCH',col:[.60,.80,.20]},{label:'HIDE',col:[.20,.60,.20]}]},
+  /* 13 */ {title:'A SECRET KEPT',         titleCol:[255,200,255], bg:[.10,.04,.10], room:[[.18,.08,.18],[.14,.06,.14],[.22,.10,.22]], portals:[{label:'TELL NO ONE',col:[.80,.30,.80]},{label:'WHISPER',col:[.60,.20,.60]}]},
+  /* 14 */ {title:'GROWING PAINS',         titleCol:[255,230,150], bg:[.12,.10,.02], room:[[.20,.18,.04],[.16,.14,.03],[.24,.22,.05]], portals:[{label:'STRETCH',col:[.90,.80,.20]},{label:'CONTRACT',col:[.70,.60,.10]},{label:'ENDURE',col:[1.0,.90,.30]}]},
+  /* 15 */ {title:'HALF OF EVERYTHING',    titleCol:[200,240,255], bg:[.05,.09,.14], room:[[.10,.15,.22],[.08,.12,.18],[.12,.18,.26]], portals:[{label:'GIVE',col:[.30,.70,.90]},{label:'TAKE',col:[.20,.50,.70]}]},
+  /* 16 */ {title:'THE BODY CHANGES',      titleCol:[255,160,200], bg:[.12,.03,.08], room:[[.20,.06,.14],[.16,.05,.11],[.24,.07,.16]], portals:[{label:'ACCEPT',col:[.90,.30,.60]},{label:'DENY',col:[.60,.10,.40]},{label:'WONDER',col:[1.0,.50,.70]}]},
+  /* 17 */ {title:'A DOOR WITHOUT A KEY',  titleCol:[220,200,180], bg:[.10,.08,.06], room:[[.18,.14,.10],[.14,.11,.08],[.22,.17,.12]], portals:[{label:'KNOCK',col:[.80,.65,.40]},{label:'WALK PAST',col:[.55,.45,.30]}]},
+  /* 18 */ {title:'THINGS UNNAMED',        titleCol:[180,255,255], bg:[.03,.10,.10], room:[[.07,.16,.16],[.05,.12,.12],[.09,.20,.20]], portals:[{label:'POINT AT THEM',col:[.20,.80,.80]},{label:'LET THEM BE',col:[.10,.60,.60]},{label:'NAME THEM WRONG',col:[.30,.90,.70]}]},
+  /* 19 */ {title:'THE LONGEST ROOM',      titleCol:[255,220,200], bg:[.11,.08,.05], room:[[.18,.13,.08],[.14,.10,.06],[.22,.16,.10]], portals:[{label:'KEEP WALKING',col:[.85,.70,.40]},{label:'SIT DOWN',col:[.60,.50,.30]}]},
+  /* 20 */ {title:'LOVE OR SOMETHING',     titleCol:[255,150,170], bg:[.13,.03,.07], room:[[.22,.05,.12],[.17,.04,.09],[.26,.06,.14]], portals:[{label:'TOWARD',col:[1.0,.25,.50]},{label:'AWAY',col:[.60,.10,.30]},{label:'SIDEWAYS',col:[.80,.40,.40]}]},
+  /* 21 */ {title:'WHAT WAS LOST',         titleCol:[200,200,220], bg:[.07,.07,.11], room:[[.12,.12,.18],[.09,.09,.14],[.14,.14,.22]], portals:[{label:'SEARCH',col:[.60,.60,.80]},{label:'MOURN',col:[.40,.40,.60]}]},
+  /* 22 */ {title:'SOMEONE STAYS',         titleCol:[200,255,200], bg:[.04,.11,.04], room:[[.08,.18,.08],[.06,.14,.06],[.10,.22,.10]], portals:[{label:'BESIDE YOU',col:[.30,.85,.40]},{label:'BEHIND YOU',col:[.20,.65,.25]},{label:'AHEAD OF YOU',col:[.40,.90,.30]}]},
+  /* 23 */ {title:'THE OLD ROOM',          titleCol:[240,220,180], bg:[.10,.08,.04], room:[[.18,.14,.06],[.14,.10,.04],[.20,.16,.08]], portals:[{label:'REMEMBER IT',col:[.85,.72,.30]},{label:'CHANGE IT',col:[.65,.52,.18]}]},
+  /* 24 */ {title:'ALMOST FULL',           titleCol:[255,200,150], bg:[.12,.07,.03], room:[[.20,.12,.05],[.16,.09,.04],[.24,.14,.06]], portals:[{label:'NOT YET',col:[.90,.65,.25]},{label:'NEARLY',col:[.70,.50,.18]},{label:'ALMOST',col:[1.0,.75,.30]}]},
+  /* 25 */ {title:'THE QUIET YEARS',       titleCol:[180,200,240], bg:[.05,.07,.12], room:[[.09,.12,.20],[.07,.09,.16],[.11,.14,.24]], portals:[{label:'LET IT PASS',col:[.40,.55,.80]},{label:'HOLD IT CLOSE',col:[.25,.38,.62]}]},
+  /* 26 */ {title:'SOMETHING RETURNS',     titleCol:[255,240,210], bg:[.10,.09,.05], room:[[.18,.16,.08],[.14,.12,.06],[.22,.20,.10]], portals:[{label:'WELCOME IT',col:[.88,.78,.35]},{label:'CLOSE THE DOOR',col:[.65,.58,.22]},{label:'WAIT AND SEE',col:[.96,.86,.42]}]},
+  /* 27 */ {title:'LESS AND LESS',         titleCol:[200,180,200], bg:[.08,.06,.08], room:[[.14,.10,.14],[.10,.08,.10],[.16,.12,.16]], portals:[{label:'RELEASE',col:[.65,.48,.65]},{label:'HOLD ON',col:[.45,.32,.45]}]},
+  /* 28 */ {title:'BEFORE THE LAST DOOR',  titleCol:[200,220,255], bg:[.06,.07,.12], room:[[.10,.12,.20],[.08,.10,.16],[.12,.14,.24]], portals:[{label:'ONE MORE STEP',col:[.45,.62,.85]},{label:'REST HERE',col:[.30,.45,.65]},{label:'LOOK BACK',col:[.55,.70,.90]}]},
+  /* 29 */ {title:'THE LAST ROOM',         titleCol:[255,255,240], bg:[.07,.07,.07], room:[[.13,.13,.13],[.10,.10,.10],[.15,.15,.15]], portals:[{label:'FORWARD',col:[.90,.90,.90]}]},
+  /* 30 — ENDING VOID */
+  {title:'',titleCol:[255,255,255],bg:[0,0,0],room:[[.01,.01,.01],[.01,.01,.01],[.01,.01,.01]],portals:[],isEnding:true},
 ];
 
+const TOTAL_REGULAR = BLUEPRINTS.length - 1; // 30 regular stages
+
+/* ════════════════════════════════════════════
+   BUILD SCENES
+════════════════════════════════════════════ */
+const SCENES = BLUEPRINTS.map((bp,idx)=>({
+  ...bp,
+  room: buildRoom(bp.room[0], bp.room[1], bp.room[2]),
+  portals: [],
+  vbo: null,
+  idx,
+}));
+
 SCENES.forEach(s=>{
-  s.vbo=gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER,s.vbo);
-  gl.bufferData(gl.ARRAY_BUFFER,s.room.data,gl.STATIC_DRAW);
+  s.vbo = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, s.vbo);
+  gl.bufferData(gl.ARRAY_BUFFER, s.room.data, gl.STATIC_DRAW);
 });
 
-/* ─── HEARTBEAT SYSTEM ───────────────────────────────────── */
-let heartbeatActive=false;
-let heartbeatT=0;
-// heartbeat pattern: two quick pulses then silence
-// total cycle ~1.8s
+function assignPortals(sceneIdx){
+  const s = SCENES[sceneIdx];
+  if(s.isEnding){ s.portals=[]; return; }
+  const bp = BLUEPRINTS[sceneIdx];
+  const n = bp.portals.length;
+  // next scene is always sceneIdx+1, ending at the void
+  const nextIdx = sceneIdx < SCENES.length - 2 ? sceneIdx + 1 : SCENES.length - 1;
+  // seed changes each visit so layout shuffles
+  const seed = sceneIdx * 7919 + roomsVisited * 6271;
+  const slots = randomSlots(n, seed);
+  s.portals = bp.portals.map((p,i)=>({
+    label: p.label,
+    col:   p.col,
+    wx:    slots[i],
+    next:  nextIdx,
+  }));
+}
+
+assignPortals(0);
+
+/* ════════════════════════════════════════════
+   HEARTBEAT SYSTEM
+════════════════════════════════════════════ */
+let heartbeatActive=false, heartbeatT=0;
 function triggerHeartbeat(){
   if(heartbeatActive) return;
-  heartbeatActive=true;
-  heartbeatT=0;
+  heartbeatActive=true; heartbeatT=0;
 }
 function updateHeartbeat(dt){
-  if(!heartbeatActive){heartbeatEl.style.opacity='0';return;}
+  if(!heartbeatActive){ heartbeatEl.style.opacity='0'; return; }
   heartbeatT+=dt;
-  // first beat peak at 0.12s, second at 0.38s, done at 1.0s
   let alpha=0;
-  if(heartbeatT<0.12){
-    alpha=heartbeatT/0.12;
-  } else if(heartbeatT<0.22){
-    alpha=1-(heartbeatT-0.12)/0.10;
-  } else if(heartbeatT<0.32){
-    alpha=(heartbeatT-0.22)/0.10*0.7;
-  } else if(heartbeatT<0.52){
-    alpha=0.7-(heartbeatT-0.32)/0.20*0.7;
-  } else if(heartbeatT<1.0){
-    alpha=0;
-  } else {
-    heartbeatActive=false;alpha=0;
-  }
+  if     (heartbeatT<0.12) alpha=heartbeatT/0.12;
+  else if(heartbeatT<0.22) alpha=1-(heartbeatT-0.12)/0.10;
+  else if(heartbeatT<0.32) alpha=(heartbeatT-0.22)/0.10*0.7;
+  else if(heartbeatT<0.52) alpha=0.7-(heartbeatT-0.32)/0.20*0.7;
+  else if(heartbeatT<1.0)  alpha=0;
+  else{ heartbeatActive=false; alpha=0; }
   heartbeatEl.style.opacity=String(Math.max(0,alpha));
 }
 
-/* ─── DIM SYSTEM ─────────────────────────────────────────── */
-// Max dimming caps at 0.55 opacity by the final regular room
+/* ════════════════════════════════════════════
+   DIM SYSTEM
+════════════════════════════════════════════ */
 function updateDimOverlay(){
-  const totalRegularRooms=SCENES.length-1; // exclude ending
-  const fraction=Math.min(1,roomsVisited/Math.max(1,totalRegularRooms));
-  const targetOpacity=fraction*0.52;
-  dimOverlay.style.opacity=String(targetOpacity);
+  const fraction = Math.min(1, roomsVisited / Math.max(1, TOTAL_REGULAR));
+  dimOverlay.style.opacity = String(fraction * 0.54);
 }
 
-/* ─── ENDING ROOM WORDS ──────────────────────────────────── */
-// Words appear on the floor as if painted there, revealed as player walks forward (Z decreasing)
-// Player starts at z=1, walks toward z=-(RD-0.5) in ending room
-// words spaced along z axis
+/* ════════════════════════════════════════════
+   ENDING ROOM WORDS
+════════════════════════════════════════════ */
 const ENDING_WORDS=[
-  {word:'this',  z:-0.5},
-  {word:'is',    z:-2.0},
-  {word:'the',   z:-3.5},
-  {word:'end',   z:-5.0},
+  {word:'this', z:-0.5},
+  {word:'is',   z:-2.0},
+  {word:'the',  z:-3.5},
+  {word:'end',  z:-5.0},
 ];
-// void threshold: entering darkness at the very back
-const VOID_THRESHOLD_Z=-5.5;
 
-function renderEndingOverlay(mvp,playerZ){
+function renderEndingOverlay(mvp, playerZ){
   oc.clearRect(0,0,overlay.width,overlay.height);
   ENDING_WORDS.forEach(w=>{
-    // word is on the floor, centered x=0, y just above floor
     const wy=FLOOR_Y+0.08;
-    const nd=toNDC(mvp,0,wy,w.z);
-    if(!nd) return;
+    const nd=toNDC(mvp,0,wy,w.z); if(!nd) return;
     const sx=(nd[0]*.5+.5)*overlay.width;
     const sy=(1-(nd[1]*.5+.5))*overlay.height;
-    // visibility fades in as player approaches
     const dist=Math.abs(playerZ-w.z);
-    const visRange=3.5;
-    const alpha=Math.max(0,Math.min(1,1-dist/visRange));
+    const alpha=Math.max(0,Math.min(1,1-dist/3.5));
     if(alpha<0.01) return;
-    // perspective scale: how big should it appear
     const clip=projectW(mvp,0,wy,w.z);
     const pscale=clip[3]>0.01?200/clip[3]:0;
     const fs=Math.max(8,Math.min(pscale,48));
     oc.save();
-    // foreshortening tilt: skew text to lie on floor
     oc.translate(sx,sy);
-    oc.scale(1,0.28); // flatten strongly to simulate floor perspective
+    oc.scale(1,0.28);
     oc.fillStyle=`rgba(255,255,255,${alpha*0.72})`;
     oc.font=`100 ${fs}px 'Courier New',monospace`;
     oc.letterSpacing='0.5em';
-    oc.textAlign='center';
-    oc.textBaseline='middle';
+    oc.textAlign='center'; oc.textBaseline='middle';
     oc.fillText(w.word.toUpperCase(),0,0);
     oc.restore();
   });
 }
 
-/* ─── PLAYER & STATE ─────────────────────────────────────── */
-let sceneIdx=0,gTime=0,trans=false;
+/* ════════════════════════════════════════════
+   PLAYER & STATE
+════════════════════════════════════════════ */
+let sceneIdx=0, gTime=0, trans=false;
 const player={x:0,z:1,facingX:0,moving:0,walkPhase:0};
 const keys={};
 window.addEventListener('keydown',e=>{
@@ -498,13 +525,15 @@ function getVP(){
   return mul(proj,lookAt(eye,at));
 }
 
-/* ─── RENDER FUNCTIONS ───────────────────────────────────── */
+/* ════════════════════════════════════════════
+   RENDER FUNCTIONS
+════════════════════════════════════════════ */
 function renderRoom(s,mvp){
   gl.useProgram(roomProg);
   gl.bindBuffer(gl.ARRAY_BUFFER,s.vbo);
   const aP=gl.getAttribLocation(roomProg,'a_pos');
   const aC=gl.getAttribLocation(roomProg,'a_col');
-  gl.enableVertexAttribArray(aP);gl.enableVertexAttribArray(aC);
+  gl.enableVertexAttribArray(aP); gl.enableVertexAttribArray(aC);
   gl.vertexAttribPointer(aP,3,gl.FLOAT,false,24,0);
   gl.vertexAttribPointer(aC,3,gl.FLOAT,false,24,12);
   gl.uniformMatrix4fv(u(roomProg,'u_mvp'),false,mvp);
@@ -518,7 +547,7 @@ function renderShadow(mvp){
   const verts=[];
   const fy=FLOOR_Y+0.02;
   for(let i=0;i<N_SHADOW;i++){
-    const a0=(i/N_SHADOW)*Math.PI*2,a1=((i+1)/N_SHADOW)*Math.PI*2;
+    const a0=(i/N_SHADOW)*Math.PI*2, a1=((i+1)/N_SHADOW)*Math.PI*2;
     verts.push(
       player.x,fy,player.z,.12,.10,.02,
       player.x+Math.cos(a0)*.75,fy,player.z+Math.sin(a0)*.38,.12,.10,.02,
@@ -530,7 +559,7 @@ function renderShadow(mvp){
   gl.useProgram(roomProg);
   const aP=gl.getAttribLocation(roomProg,'a_pos');
   const aC=gl.getAttribLocation(roomProg,'a_col');
-  gl.enableVertexAttribArray(aP);gl.enableVertexAttribArray(aC);
+  gl.enableVertexAttribArray(aP); gl.enableVertexAttribArray(aC);
   gl.vertexAttribPointer(aP,3,gl.FLOAT,false,24,0);
   gl.vertexAttribPointer(aC,3,gl.FLOAT,false,24,12);
   gl.uniformMatrix4fv(u(roomProg,'u_mvp'),false,mvp);
@@ -543,16 +572,14 @@ function renderBlob(mvp){
   const clip=projectW(mvp,player.x,FLOOR_Y,player.z);
   if(clip[3]<0.05) return;
   const w=clip[3];
-  const nx=clip[0]/w,ny=clip[1]/w;
+  const nx=clip[0]/w, ny=clip[1]/w;
   const proj=perspective(Math.PI/3.4,W/H,0.1,80);
   const scaleNDC=proj[5]/w;
-  // capiScale grows the blob over rooms
   const blobRadius=1.2*capiScale;
   const sy=scaleNDC*blobRadius;
   const sx=sy*(H/W);
   const cy_ndc=ny+sy;
-  gl.useProgram(sprProg);
-  bindQuad(sprProg);
+  gl.useProgram(sprProg); bindQuad(sprProg);
   gl.activeTexture(gl.TEXTURE0);
   gl.bindTexture(gl.TEXTURE_2D,blobTex);
   gl.uniform1i(u(sprProg,'u_tex'),0);
@@ -565,7 +592,7 @@ function renderBlob(mvp){
 }
 
 function portalNDC(mvp,wx){
-  const wy=0.5,wz=PORTAL_Z,vr=PRT_WR*1.1;
+  const wy=0.5, wz=PORTAL_Z, vr=PRT_WR*1.1;
   const cen=toNDC(mvp,wx,wy,wz);
   const right=toNDC(mvp,wx+PRT_WR,wy,wz);
   const top=toNDC(mvp,wx,wy+vr,wz);
@@ -574,10 +601,10 @@ function portalNDC(mvp,wx){
 }
 
 function renderPortals(s,mvp){
-  gl.useProgram(prtProg);bindQuad(prtProg);
-  gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE);
+  gl.useProgram(prtProg); bindQuad(prtProg);
+  gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA,gl.ONE);
   s.portals.forEach(p=>{
-    const nd=portalNDC(mvp,p.wx);if(!nd) return;
+    const nd=portalNDC(mvp,p.wx); if(!nd) return;
     const pulse=Math.sin(gTime*2.2+p.wx)*.5+.5;
     gl.uniform2f(u(prtProg,'u_ctr'),nd.nx,nd.ny);
     gl.uniform2f(u(prtProg,'u_sz'),nd.sx,nd.sy);
@@ -591,13 +618,13 @@ function renderPortals(s,mvp){
 function renderOverlay(s,mvp){
   oc.clearRect(0,0,overlay.width,overlay.height);
   s.portals.forEach(p=>{
-    const nd=portalNDC(mvp,p.wx);if(!nd) return;
+    const nd=portalNDC(mvp,p.wx); if(!nd) return;
     const sx=(nd.nx*.5+.5)*overlay.width;
     const sy=(1-(nd.ny*.5+.5))*overlay.height;
     const c=p.col;
     oc.fillStyle=`rgba(${Math.round(c[0]*255)},${Math.round(c[1]*255)},${Math.round(c[2]*255)},.88)`;
-    oc.font='10px Courier New';oc.letterSpacing='.15em';oc.textAlign='center';
-    const jx=(Math.random()-.5)*1.5,jy=(Math.random()-.5)*1.5;
+    oc.font='10px Courier New'; oc.letterSpacing='.15em'; oc.textAlign='center';
+    const jx=(Math.random()-.5)*1.5, jy=(Math.random()-.5)*1.5;
     oc.fillText(p.label,sx+jx,sy-44+jy);
     const dist=Math.hypot(player.x-p.wx,player.z-PORTAL_Z);
     if(dist<PORTAL_WORLD_R*1.5){
@@ -607,67 +634,71 @@ function renderOverlay(s,mvp){
       oc.fillText('[ enter ]',sx,sy+50);
     }
   });
+  // room counter — subtle, bottom right
+  oc.fillStyle='rgba(255,255,255,0.15)';
+  oc.font='8px Courier New';
+  oc.letterSpacing='0.2em';
+  oc.textAlign='right';
+  oc.fillText(`${sceneIdx} / ${TOTAL_REGULAR}`, overlay.width-18, overlay.height-18);
 }
 
-/* ─── VOID DARKNESS (ending room) ───────────────────────── */
-// As player approaches back wall in ending room, a second
-// black vignette creeps in from the edges then floods to full
+/* ════════════════════════════════════════════
+   VOID DARKNESS (ending room)
+════════════════════════════════════════════ */
 let voidAlpha=0;
 function renderVoidCanvas(){
-  // drawn on overlay after everything else
   if(voidAlpha<=0) return;
-  const vw=overlay.width,vh=overlay.height;
+  const vw=overlay.width, vh=overlay.height;
   const grad=oc.createRadialGradient(vw/2,vh/2,0,vw/2,vh/2,Math.max(vw,vh)*.6);
   grad.addColorStop(0,`rgba(0,0,0,${voidAlpha*0.7})`);
   grad.addColorStop(1,`rgba(0,0,0,${voidAlpha})`);
-  oc.fillStyle=grad;
-  oc.fillRect(0,0,vw,vh);
+  oc.fillStyle=grad; oc.fillRect(0,0,vw,vh);
 }
 
-/* ─── SCENE TRANSITION ───────────────────────────────────── */
-function goToScene(next,fromPortal){
-  if(trans) return;trans=true;
+/* ════════════════════════════════════════════
+   SCENE TRANSITION
+════════════════════════════════════════════ */
+function goToScene(next){
+  if(trans) return; trans=true;
   roomsVisited++;
-
-  // grow CAPI: each room adds 8% to scale, capped at 2.2x
-  capiScale=Math.min(2.2,1.0+roomsVisited*0.08);
-
-  // trigger heartbeat every 2 rooms
+  capiScale = Math.min(2.2, 1.0 + roomsVisited * 0.04);
   if(roomsVisited%2===0) triggerHeartbeat();
-
-  // update dim
   updateDimOverlay();
-
   fadeEl.style.opacity='1';
   setTimeout(()=>{
     sceneIdx=next;
-    player.x=0;player.z=1;player.facingX=0;
+    player.x=0; player.z=1; player.facingX=0;
     voidAlpha=0;
+    assignPortals(next);
     const s=SCENES[sceneIdx];
     setTimeout(()=>{
       fadeEl.style.opacity='0';
-      if(s.title) showTitle(s.title,s.titleCol);
-      setTimeout(()=>{trans=false;},(TITLE_IN_DUR+TITLE_HOLD_DUR)*1000);
+      if(s.title) showTitle(s.title, s.titleCol);
+      setTimeout(()=>{ trans=false; },(TITLE_IN_DUR+TITLE_HOLD_DUR)*1000);
     },400);
   },750);
 }
 
-/* ─── FIRST TITLE ────────────────────────────────────────── */
-showTitle(SCENES[0].title,SCENES[0].titleCol);
+/* ════════════════════════════════════════════
+   FIRST TITLE
+════════════════════════════════════════════ */
+showTitle(SCENES[0].title, SCENES[0].titleCol);
 
-/* ─── MAIN LOOP ──────────────────────────────────────────── */
+/* ════════════════════════════════════════════
+   MAIN LOOP
+════════════════════════════════════════════ */
 let last=0;
 function loop(ts){
   const dt=Math.min((ts-last)/1000,.05);
-  last=ts;gTime+=dt;
+  last=ts; gTime+=dt;
   const s=SCENES[sceneIdx];
   const isEnding=s.isEnding||false;
 
   const SPEED=4.5;
-  let dx=0,dz=0;
+  let dx=0, dz=0;
   if(!trans&&birthDone){
-    if(keys['w']||keys['arrowup'])   dz-=1;
-    if(keys['s']||keys['arrowdown']) dz+=1;
+    if(keys['w']||keys['arrowup'])    dz-=1;
+    if(keys['s']||keys['arrowdown'])  dz+=1;
     if(!isEnding){
       if(keys['a']||keys['arrowleft']) dx-=1;
       if(keys['d']||keys['arrowright'])dx+=1;
@@ -679,20 +710,21 @@ function loop(ts){
     player.x+=(dx/len)*SPEED*dt;
     player.z+=(dz/len)*SPEED*dt;
     if(isEnding) player.facingX=0;
-    else player.facingX=dx/len;
+    else         player.facingX=dx/len;
   }
 
   if(isEnding){
-    // restrict to forward-only lane
     player.x=0;
     player.z=Math.max(-(RD-0.5),Math.min(RD-.5,player.z));
-    // compute void alpha based on depth
     const deepestWall=-(RD-0.5);
     const voidStart=-4.0;
     voidAlpha=Math.max(0,Math.min(1,(player.z-voidStart)/(deepestWall-voidStart)));
-    voidAlpha=voidAlpha*voidAlpha; // ease in
-    // if player walks all the way into the void, reset
+    voidAlpha=voidAlpha*voidAlpha;
     if(player.z<=-(RD-0.6)&&!trans){
+      // full reset
+      roomsVisited=0;
+      capiScale=1.0;
+      dimOverlay.style.opacity='0';
       goToScene(0);
     }
   } else {
@@ -703,7 +735,6 @@ function loop(ts){
   player.moving=mv?Math.min(1,player.moving+dt*6):Math.max(0,player.moving-dt*9);
   if(mv) player.walkPhase=(player.walkPhase+dt*3)%1;
 
-  // portal collision (regular rooms only)
   if(!trans&&!isEnding){
     s.portals.forEach(p=>{
       const dist=Math.hypot(player.x-p.wx,player.z-PORTAL_Z);
@@ -711,7 +742,7 @@ function loop(ts){
     });
   }
 
-  // render
+  // ── render ──────────────────────────────
   gl.clearColor(s.bg[0],s.bg[1],s.bg[2],1);
   gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
   gl.enable(gl.DEPTH_TEST);
@@ -722,7 +753,6 @@ function loop(ts){
   renderBlob(mvp);
 
   if(isEnding){
-    // clear then draw ending floor words + void
     oc.clearRect(0,0,overlay.width,overlay.height);
     renderEndingOverlay(mvp,player.z);
     renderVoidCanvas();
@@ -732,7 +762,6 @@ function loop(ts){
 
   updateTitle(dt);
   updateHeartbeat(dt);
-
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
