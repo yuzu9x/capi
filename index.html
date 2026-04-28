@@ -9,12 +9,12 @@
 
 <body>
 <div id="birth"></div>
-<div id="birth-label">YOU ARE: CAPI</div>
+<div id="birth-label">CAPI</div>
 <div id="birth-headphones">this is a sonic experience.<br>please wear headphones for the most optimal experience.</div>
 <canvas id="c"></canvas>
 <canvas id="overlay"></canvas>
 <canvas id="title-canvas"></canvas>
-<div id="hint">WASD to walk · find the portal</div>
+<div id="hint">WASD to walk · listen · find the portal</div>
 <div id="fade"></div>
 <div id="heartbeat"></div>
 <div id="dim-overlay"></div>
@@ -569,6 +569,9 @@ function fadeAudioOut(audio, durationMs, onComplete) {
    PLAYER & STATE
 ════════════════════════════════════════════ */
 let sceneIdx=0, gTime=0, trans=false;
+let portalTimer=0; // seconds since player spawned in current scene
+const PORTAL_REVEAL_DELAY=10.0;  // seconds before portals appear
+const PORTAL_FADE_DUR=1.5;       // seconds for the fade-in
 const player={x:0,z:RD-1,facingX:0,moving:0,walkPhase:0};
 const keys={};
 window.addEventListener('keydown',e=>{
@@ -659,12 +662,12 @@ function portalNDC(mvp,wx){
   return{nx:cen[0],ny:cen[1],sx:Math.abs(right[0]-cen[0]),sy:Math.abs(top[1]-cen[1])};
 }
 
-function renderPortals(s,mvp){
+function renderPortals(s,mvp,portalAlpha){
   gl.useProgram(prtProg); bindQuad(prtProg);
   gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA,gl.ONE);
   s.portals.forEach(p=>{
     const nd=portalNDC(mvp,p.wx); if(!nd) return;
-    const pulse=Math.sin(gTime*2.2+p.wx)*.5+.5;
+    const pulse=(Math.sin(gTime*2.2+p.wx)*.5+.5)*portalAlpha;
     gl.uniform2f(u(prtProg,'u_ctr'),nd.nx,nd.ny);
     gl.uniform2f(u(prtProg,'u_sz'),nd.sx,nd.sy);
     gl.uniform3fv(u(prtProg,'u_col'),p.col);
@@ -674,25 +677,27 @@ function renderPortals(s,mvp){
   gl.disable(gl.BLEND);
 }
 
-function renderOverlay(s,mvp){
+function renderOverlay(s,mvp,portalsVisible,portalAlpha){
   oc.clearRect(0,0,overlay.width,overlay.height);
-  s.portals.forEach(p=>{
-    const nd=portalNDC(mvp,p.wx); if(!nd) return;
-    const sx=(nd.nx*.5+.5)*overlay.width;
-    const sy=(1-(nd.ny*.5+.5))*overlay.height;
-    const c=p.col;
-    oc.fillStyle=`rgba(${Math.round(c[0]*255)},${Math.round(c[1]*255)},${Math.round(c[2]*255)},.88)`;
-    oc.font='10px Courier New'; oc.letterSpacing='.15em'; oc.textAlign='center';
-    const jx=(Math.random()-.5)*1.5, jy=(Math.random()-.5)*1.5;
-    oc.fillText(p.label,sx+jx,sy-44+jy);
-    const dist=Math.hypot(player.x-p.wx,player.z-PORTAL_Z);
-    if(dist<PORTAL_WORLD_R*1.5){
-      const a=Math.max(0,1-dist/(PORTAL_WORLD_R*1.5));
-      oc.fillStyle=`rgba(255,255,255,${a*.7})`;
-      oc.font='9px Courier New';
-      oc.fillText('[ enter ]',sx,sy+50);
-    }
-  });
+  if(portalsVisible){
+    s.portals.forEach(p=>{
+      const nd=portalNDC(mvp,p.wx); if(!nd) return;
+      const sx=(nd.nx*.5+.5)*overlay.width;
+      const sy=(1-(nd.ny*.5+.5))*overlay.height;
+      const c=p.col;
+      oc.fillStyle=`rgba(${Math.round(c[0]*255)},${Math.round(c[1]*255)},${Math.round(c[2]*255)},${.88*portalAlpha})`;
+      oc.font='10px Courier New'; oc.letterSpacing='.15em'; oc.textAlign='center';
+      const jx=(Math.random()-.5)*1.5, jy=(Math.random()-.5)*1.5;
+      oc.fillText(p.label,sx+jx,sy-44+jy);
+      const dist=Math.hypot(player.x-p.wx,player.z-PORTAL_Z);
+      if(dist<PORTAL_WORLD_R*1.5){
+        const a=Math.max(0,1-dist/(PORTAL_WORLD_R*1.5))*portalAlpha;
+        oc.fillStyle=`rgba(255,255,255,${a*.7})`;
+        oc.font='9px Courier New';
+        oc.fillText('[ enter ]',sx,sy+50);
+      }
+    });
+  }
   oc.fillStyle='rgba(255,255,255,0.15)';
   oc.font='8px Courier New';
   oc.letterSpacing='0.2em';
@@ -727,6 +732,7 @@ function goToScene(next){
     sceneIdx=next;
     player.x=0; player.z=RD-1; player.facingX=0;
     voidAlpha=0;
+    portalTimer=0;
     assignPortals(next);
     const s=SCENES[sceneIdx];
     setTimeout(()=>{
@@ -748,7 +754,7 @@ function loop(ts){
   const s=SCENES[sceneIdx];
   const isEnding=s.isEnding||false;
 
-  const SPEED=4.5;
+  const SPEED=2.5;
   let dx=0, dz=0;
   if(!trans&&birthDone){
     if(keys['w']||keys['arrowup'])    dz-=1;
@@ -788,7 +794,14 @@ function loop(ts){
   player.moving=mv?Math.min(1,player.moving+dt*6):Math.max(0,player.moving-dt*9);
   if(mv) player.walkPhase=(player.walkPhase+dt*3)%1;
 
-  if(!trans&&!isEnding){
+  // advance portal reveal timer only when not transitioning
+  if(!trans&&!isEnding&&birthDone) portalTimer+=dt;
+  const portalAlpha = Math.max(0, Math.min(1,
+    (portalTimer - PORTAL_REVEAL_DELAY) / PORTAL_FADE_DUR
+  ));
+  const portalsVisible = portalAlpha > 0;
+
+  if(!trans&&!isEnding&&portalsVisible){
     s.portals.forEach(p=>{
       const dist=Math.hypot(player.x-p.wx,player.z-PORTAL_Z);
       if(dist<PORTAL_WORLD_R) goToScene(p.next);
@@ -801,7 +814,7 @@ function loop(ts){
   const mvp=getVP();
   renderRoom(s,mvp);
   renderShadow(mvp);
-  if(!isEnding) renderPortals(s,mvp);
+  if(!isEnding&&portalsVisible) renderPortals(s,mvp,portalAlpha);
   renderBlob(mvp);
 
   if(isEnding){
@@ -809,7 +822,7 @@ function loop(ts){
     renderEndingOverlay(mvp,player.z);
     renderVoidCanvas();
   } else {
-    renderOverlay(s,mvp);
+    renderOverlay(s,mvp,portalsVisible,portalAlpha);
   }
 
   updateTitle(dt);
