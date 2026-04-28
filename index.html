@@ -9,12 +9,12 @@
 
 <body>
 <div id="birth"></div>
-<div id="birth-label">CAPI</div>
+<div id="birth-label">YOU ARE: CAPI</div>
 <div id="birth-headphones">this is a sonic experience.<br>please wear headphones for the most optimal experience.</div>
 <canvas id="c"></canvas>
 <canvas id="overlay"></canvas>
 <canvas id="title-canvas"></canvas>
-<div id="hint">WASD to walk · listen · find the portal</div>
+<div id="hint">WASD to walk · find the portal</div>
 <div id="fade"></div>
 <div id="heartbeat"></div>
 <div id="dim-overlay"></div>
@@ -326,7 +326,7 @@ function uploadBlob(phase,moveAmt,facingX){
 /* ════════════════════════════════════════════
    ROOM GEOMETRY
 ════════════════════════════════════════════ */
-const RW=2.0, RH=2.5, RD=18;
+const RW=2.0, RH=2.5, RD=18, RD_NEAR=24;
 const FLOOR_Y=-RH;
 const PORTAL_Z=-(RD-0.2);
 const PORTAL_WORLD_R=0.85;
@@ -335,24 +335,22 @@ const PRT_WR=0.70;
 function buildRoom(floorC,wallC,ceilC){
   const verts=[];
   function quad(a,b,c,d,col){ [a,b,c,a,c,d].forEach(p=>verts.push(...p,...col)); }
-  quad([-RW,FLOOR_Y,-RD],[RW,FLOOR_Y,-RD],[RW,FLOOR_Y,RD],[-RW,FLOOR_Y,RD], floorC.map(v=>Math.min(1,v*1.15)));
-  quad([-RW,RH,-RD],[-RW,RH,RD],[RW,RH,RD],[RW,RH,-RD], ceilC.map(v=>v*.85));
+  // floor extends from back wall all the way to RD_NEAR in front
+  quad([-RW,FLOOR_Y,-RD],[RW,FLOOR_Y,-RD],[RW,FLOOR_Y,RD_NEAR],[-RW,FLOOR_Y,RD_NEAR], floorC.map(v=>Math.min(1,v*1.15)));
+  // ceiling only over the corridor proper
+  quad([-RW,RH,-RD],[-RW,RH,RD],  [RW,RH,RD],  [RW,RH,-RD],   ceilC.map(v=>v*.85));
+  // back wall
   quad([-RW,FLOOR_Y,-RD],[RW,FLOOR_Y,-RD],[RW,RH,-RD],[-RW,RH,-RD], wallC.map(v=>Math.min(1,v*1.3)));
+  // near wall (behind player start — gives something to bounce light off)
   quad([-RW,FLOOR_Y,RD],[-RW,RH,RD],[RW,RH,RD],[RW,FLOOR_Y,RD], wallC.map(v=>v*.55));
+  // left wall
   quad([-RW,FLOOR_Y,-RD],[-RW,RH,-RD],[-RW,RH,RD],[-RW,FLOOR_Y,RD], wallC.map((v,i)=>i===0?Math.min(1,v*1.2):v*.95));
+  // right wall
   quad([RW,FLOOR_Y,-RD],[RW,FLOOR_Y,RD],[RW,RH,RD],[RW,RH,-RD], wallC.map(v=>v*.78));
   return{data:new Float32Array(verts), count:verts.length/6};
 }
 
-/* ════════════════════════════════════════════
-   FIXED PORTAL POSITIONS
-   Portals are placed symmetrically across the back
-   wall based purely on count. No randomisation.
-   1 portal  → centre (x=0)
-   2 portals → ±2.2
-   3 portals → 0, ±2.8
-   4 portals → ±1.4, ±3.5 (clamped to room width)
-════════════════════════════════════════════ */
+
 function fixedSlots(n){
   switch(n){
     case 1: return [0];
@@ -370,18 +368,18 @@ function fixedSlots(n){
 let roomsVisited=0;
 
 /* ════════════════════════════════════════════
-   30 SCENE BLUEPRINTS  (index 0-29 + ending at 30)
+   25 Stages
 ════════════════════════════════════════════ */
 const BLUEPRINTS=[
-  /* 00 */ {title:'THE BEGINNING',         titleCol:[255,255,255], bg:[.05,.07,.14], room:[[.93,.14,.24],[.09,.10,.18],[.16,.15,.26]], portals:[{label:'ENTER THE LIGHT',col:[.92,.68,1.0]}]},
+  /* 00 */ {title:'THE BEGINNING',         titleCol:[255,255,255], bg:[.05,.07,.14], room:[[.09,.10,.18],[.09,.10,.18],[.16,.15,.26]], portals:[{label:'ENTER THE LIGHT',col:[.92,.68,1.0]}]},
   /* 01 */ {title:'FIRST BREATH',          titleCol:[200,255,220], bg:[.03,.10,.07], room:[[.09,.18,.13],[.07,.13,.09],[.12,.20,.16]], portals:[{label:'INHALE',col:[.42,.98,.68]},{label:'EXHALE',col:[.78,.84,1.0]}]},
   /* 02 */ {title:'EARLY TERRITORY',       titleCol:[255,200,120], bg:[.14,.06,.03], room:[[.22,.12,.07],[.17,.08,.04],[.25,.14,.09]], portals:[{label:'A PACIFIER',col:[1.0,.70,.26]},{label:'A TOY',col:[.58,.38,1.0]},{label:'A SOUND',col:[.80,.60,.20]}]},
   /* 03 */ {title:'CHOOSE',                titleCol:[255,160,180], bg:[.12,.04,.09], room:[[.20,.07,.15],[.16,.05,.11],[.24,.09,.19]], portals:[{label:'MAMA',col:[1.0,.32,.52]},{label:'PAPA',col:[.32,.66,1.0]}]},
   /* 04 */ {title:'THE WEIGHT OF IT',      titleCol:[200,180,255], bg:[.08,.05,.18], room:[[.15,.10,.28],[.12,.08,.22],[.18,.12,.30]], portals:[{label:'REMEMBER',col:[.70,.50,1.0]},{label:'FORGET',col:[.40,.30,.80]},{label:'HOLD',col:[.90,.70,1.0]}]},
-  /* 05 */ {title:'A FALL',                titleCol:[255,220,180], bg:[.10,.08,.06], room:[[.18,.14,.10],[.14,.10,.07],[.20,.16,.12]], portals:[{label:'GET UP',col:[.90,.75,.40]},{label:'STAY DOWN',col:[.50,.40,.20]}]},
-  /* 06 */ {title:'THE BED WE MADE',       titleCol:[180,230,255], bg:[.04,.08,.14], room:[[.07,.11,.20],[.05,.09,.16],[.09,.13,.24]], portals:[{label:'YELLOW DOOR',col:[1.0,.90,.20]},{label:'BLUE WINDOW',col:[.20,.70,1.0]},{label:'WHITE WALL',col:[.90,.90,.90]}]},
-  /* 07 */ {title:'A NAME GIVEN',          titleCol:[255,240,200], bg:[.12,.10,.05], room:[[.20,.16,.08],[.16,.12,.06],[.24,.20,.10]], portals:[{label:'ACCEPT IT',col:[.95,.80,.30]},{label:'RESIST IT',col:[.70,.50,.10]}]},
-  /* 08 */ {title:'LANGUAGE ARRIVES',      titleCol:[200,255,240], bg:[.03,.12,.10], room:[[.08,.18,.15],[.06,.14,.11],[.10,.22,.18]], portals:[{label:'WORD',col:[.30,.90,.70]},{label:'SILENCE',col:[.20,.60,.50]},{label:'CRY',col:[.80,.40,.40]}]},
+  /* 05 */ {title:'A FALL',                titleCol:[255,220,180], bg:[.10,.08,.06], room:[[.18,.14,.10],[.14,.10,.07],[.20,.16,.12]], portals:[{label:'GET UP',col:[.90,.75,.40]},{label:'STAY',col:[.50,.40,.20]}]},
+  /* 06 */ {title:'THE BED WE MADE',       titleCol:[180,230,255], bg:[.04,.08,.14], room:[[.07,.11,.20],[.05,.09,.16],[.09,.13,.24]], portals:[{label:'YELLOW',col:[1.0,.90,.20]},{label:'BLUE',col:[.20,.70,1.0]},{label:'RED',col:[.90,.90,.90]}]},
+  /* 07 */ {title:'A NAME GIVEN',          titleCol:[255,240,200], bg:[.12,.10,.05], room:[[.20,.16,.08],[.16,.12,.06],[.24,.20,.10]], portals:[{label:'TAKE IT!',col:[.95,.80,.30]},{label:'RECONSIDER?',col:[.70,.50,.10]}]},
+  /* 08 */ {title:'LANGUAGE ARRIVES',      titleCol:[200,255,240], bg:[.03,.12,.10], room:[[.08,.18,.15],[.06,.14,.11],[.10,.22,.18]], portals:[{label:'WORD',col:[.30,.90,.70]},{label:'QUIET',col:[.20,.60,.50]},{label:'CRY',col:[.80,.40,.40]}]},
   /* 09 */ {title:'THE MIRROR',            titleCol:[220,220,255], bg:[.06,.06,.16], room:[[.12,.12,.24],[.09,.09,.18],[.15,.15,.28]], portals:[{label:'LOOK CLOSER',col:[.70,.70,1.0]},{label:'LOOK AWAY',col:[.40,.40,.70]}]},
   /* 10 */ {title:'FIRST LIE',             titleCol:[255,180,160], bg:[.14,.05,.05], room:[[.22,.08,.08],[.16,.06,.06],[.26,.10,.10]], portals:[{label:'IT WAS NOTHING',col:[.90,.40,.40]},{label:'IT MATTERED',col:[.60,.20,.20]},{label:'FORGET IT',col:[1.0,.60,.60]}]},
   /* 11 */ {title:'SOMEONE LEAVES',        titleCol:[180,180,200], bg:[.07,.07,.12], room:[[.12,.12,.20],[.09,.09,.16],[.14,.14,.22]], portals:[{label:'WAVE GOODBYE',col:[.60,.60,.80]},{label:'FOLLOW THEM',col:[.40,.40,.60]}]},
@@ -391,19 +389,14 @@ const BLUEPRINTS=[
   /* 15 */ {title:'HALF OF EVERYTHING',    titleCol:[200,240,255], bg:[.05,.09,.14], room:[[.10,.15,.22],[.08,.12,.18],[.12,.18,.26]], portals:[{label:'GIVE',col:[.30,.70,.90]},{label:'TAKE',col:[.20,.50,.70]}]},
   /* 16 */ {title:'THE BODY CHANGES',      titleCol:[255,160,200], bg:[.12,.03,.08], room:[[.20,.06,.14],[.16,.05,.11],[.24,.07,.16]], portals:[{label:'ACCEPT',col:[.90,.30,.60]},{label:'DENY',col:[.60,.10,.40]},{label:'WONDER',col:[1.0,.50,.70]}]},
   /* 17 */ {title:'A DOOR WITHOUT A KEY',  titleCol:[220,200,180], bg:[.10,.08,.06], room:[[.18,.14,.10],[.14,.11,.08],[.22,.17,.12]], portals:[{label:'KNOCK',col:[.80,.65,.40]},{label:'WALK PAST',col:[.55,.45,.30]}]},
-  /* 18 */ {title:'THINGS UNNAMED',        titleCol:[180,255,255], bg:[.03,.10,.10], room:[[.07,.16,.16],[.05,.12,.12],[.09,.20,.20]], portals:[{label:'POINT AT THEM',col:[.20,.80,.80]},{label:'LET THEM BE',col:[.10,.60,.60]},{label:'NAME THEM WRONG',col:[.30,.90,.70]}]},
+  /* 18 */ {title:'THINGS UNNAMED',        titleCol:[180,255,255], bg:[.03,.10,.10], room:[[.07,.16,.16],[.05,.12,.12],[.09,.20,.20]], portals:[{label:'POINT',col:[.20,.80,.80]},{label:'IGNORE',col:[.10,.60,.60]},{label:'SPEAK',col:[.30,.90,.70]}]},
   /* 19 */ {title:'THE LONGEST ROOM',      titleCol:[255,220,200], bg:[.11,.08,.05], room:[[.18,.13,.08],[.14,.10,.06],[.22,.16,.10]], portals:[{label:'KEEP WALKING',col:[.85,.70,.40]},{label:'SIT DOWN',col:[.60,.50,.30]}]},
   /* 20 */ {title:'LOVE OR SOMETHING',     titleCol:[255,150,170], bg:[.13,.03,.07], room:[[.22,.05,.12],[.17,.04,.09],[.26,.06,.14]], portals:[{label:'TOWARD',col:[1.0,.25,.50]},{label:'AWAY',col:[.60,.10,.30]},{label:'SIDEWAYS',col:[.80,.40,.40]}]},
   /* 21 */ {title:'WHAT WAS LOST',         titleCol:[200,200,220], bg:[.07,.07,.11], room:[[.12,.12,.18],[.09,.09,.14],[.14,.14,.22]], portals:[{label:'SEARCH',col:[.60,.60,.80]},{label:'MOURN',col:[.40,.40,.60]}]},
   /* 22 */ {title:'SOMEONE STAYS',         titleCol:[200,255,200], bg:[.04,.11,.04], room:[[.08,.18,.08],[.06,.14,.06],[.10,.22,.10]], portals:[{label:'BESIDE YOU',col:[.30,.85,.40]},{label:'BEHIND YOU',col:[.20,.65,.25]},{label:'AHEAD OF YOU',col:[.40,.90,.30]}]},
   /* 23 */ {title:'THE OLD ROOM',          titleCol:[240,220,180], bg:[.10,.08,.04], room:[[.18,.14,.06],[.14,.10,.04],[.20,.16,.08]], portals:[{label:'REMEMBER IT',col:[.85,.72,.30]},{label:'CHANGE IT',col:[.65,.52,.18]}]},
   /* 24 */ {title:'ALMOST FULL',           titleCol:[255,200,150], bg:[.12,.07,.03], room:[[.20,.12,.05],[.16,.09,.04],[.24,.14,.06]], portals:[{label:'NOT YET',col:[.90,.65,.25]},{label:'NEARLY',col:[.70,.50,.18]},{label:'ALMOST',col:[1.0,.75,.30]}]},
-  /* 25 */ {title:'THE QUIET YEARS',       titleCol:[180,200,240], bg:[.05,.07,.12], room:[[.09,.12,.20],[.07,.09,.16],[.11,.14,.24]], portals:[{label:'LET IT PASS',col:[.40,.55,.80]},{label:'HOLD IT CLOSE',col:[.25,.38,.62]}]},
-  /* 26 */ {title:'SOMETHING RETURNS',     titleCol:[255,240,210], bg:[.10,.09,.05], room:[[.18,.16,.08],[.14,.12,.06],[.22,.20,.10]], portals:[{label:'WELCOME IT',col:[.88,.78,.35]},{label:'CLOSE THE DOOR',col:[.65,.58,.22]},{label:'WAIT AND SEE',col:[.96,.86,.42]}]},
-  /* 27 */ {title:'LESS AND LESS',         titleCol:[200,180,200], bg:[.08,.06,.08], room:[[.14,.10,.14],[.10,.08,.10],[.16,.12,.16]], portals:[{label:'RELEASE',col:[.65,.48,.65]},{label:'HOLD ON',col:[.45,.32,.45]}]},
-  /* 28 */ {title:'BEFORE THE LAST DOOR',  titleCol:[200,220,255], bg:[.06,.07,.12], room:[[.10,.12,.20],[.08,.10,.16],[.12,.14,.24]], portals:[{label:'ONE MORE STEP',col:[.45,.62,.85]},{label:'REST HERE',col:[.30,.45,.65]},{label:'LOOK BACK',col:[.55,.70,.90]}]},
-  /* 29 */ {title:'THE LAST ROOM',         titleCol:[255,255,240], bg:[.07,.07,.07], room:[[.13,.13,.13],[.10,.10,.10],[.15,.15,.15]], portals:[{label:'FORWARD',col:[.90,.90,.90]}]},
-  /* 30 — ENDING VOID */
+  /* 25 — ENDING VOID */
   {title:'',titleCol:[255,255,255],bg:[0,0,0],room:[[.01,.01,.01],[.01,.01,.01],[.01,.01,.01]],portals:[],isEnding:true},
 ];
 
@@ -513,13 +506,18 @@ function renderEndingOverlay(mvp, playerZ){
 let currentAudio = null;
 
 function playStageAudio(stageIdx) {
-  // stages are 1-indexed: SOUNDS/stage 1/stage 1.mp3
-  const n = stageIdx + 1;
+  // Regular scenes are 1-indexed (scene 0 → stage 1.mp3 … scene 24 → stage 25.mp3).
+  // The ending void is scene index 25 and also plays stage 25.mp3 (same file, no +1).
+  const s = SCENES[stageIdx];
+  const n = s.isEnding ? SCENES.length - 1 : stageIdx + 1;
   const src = `SOUNDS/stage ${n}/stage ${n}.mp3`;
+
+  // cancel any in-progress fade-in before starting a new track
+  if(_fadeInTimer){ clearInterval(_fadeInTimer); _fadeInTimer=null; }
 
   if (currentAudio) {
     const prev = currentAudio;
-    fadeAudioOut(prev, 600, () => { prev.pause(); prev.src = ''; });
+    fadeAudioOut(prev, 800, () => { prev.pause(); prev.src = ''; });
   }
 
   const audio = new Audio(src);
@@ -528,12 +526,12 @@ function playStageAudio(stageIdx) {
   currentAudio = audio;
 
   audio.play().then(() => {
-    fadeAudioIn(audio, 1200);
+    fadeAudioIn(audio, 2000);
   }).catch(() => {
     // autoplay blocked — resume on first user interaction
     const unlock = () => {
       if (currentAudio !== audio) return; // scene already changed
-      audio.play().then(() => fadeAudioIn(audio, 1200));
+      audio.play().then(() => fadeAudioIn(audio, 2000));
       window.removeEventListener('keydown', unlock);
       window.removeEventListener('pointerdown', unlock);
     };
@@ -542,26 +540,34 @@ function playStageAudio(stageIdx) {
   });
 }
 
+let _fadeInTimer = null;
+let _fadeOutTimer = null;
+
 function fadeAudioIn(audio, durationMs) {
+  if(_fadeInTimer) { clearInterval(_fadeInTimer); _fadeInTimer=null; }
   const steps = 30;
   const interval = durationMs / steps;
   let step = 0;
-  const timer = setInterval(() => {
+  _fadeInTimer = setInterval(() => {
     step++;
     audio.volume = Math.min(1.0, step / steps);
-    if (step >= steps) clearInterval(timer);
+    if (step >= steps) { clearInterval(_fadeInTimer); _fadeInTimer=null; }
   }, interval);
 }
 
 function fadeAudioOut(audio, durationMs, onComplete) {
+  if(_fadeOutTimer) { clearInterval(_fadeOutTimer); _fadeOutTimer=null; }
   const steps = 20;
   const interval = durationMs / steps;
   const startVol = audio.volume;
   let step = 0;
-  const timer = setInterval(() => {
+  _fadeOutTimer = setInterval(() => {
     step++;
     audio.volume = Math.max(0, startVol * (1 - step / steps));
-    if (step >= steps) { clearInterval(timer); if (onComplete) onComplete(); }
+    if (step >= steps) {
+      clearInterval(_fadeOutTimer); _fadeOutTimer=null;
+      if (onComplete) onComplete();
+    }
   }, interval);
 }
 
@@ -572,7 +578,7 @@ let sceneIdx=0, gTime=0, trans=false;
 let portalTimer=0; // seconds since player spawned in current scene
 const PORTAL_REVEAL_DELAY=10.0;  // seconds before portals appear
 const PORTAL_FADE_DUR=1.5;       // seconds for the fade-in
-const player={x:0,z:RD-1,facingX:0,moving:0,walkPhase:0};
+const player={x:0,z:RD_NEAR-1,facingX:0,moving:0,walkPhase:0};
 const keys={};
 window.addEventListener('keydown',e=>{
   keys[e.key.toLowerCase()]=true;
@@ -730,7 +736,7 @@ function goToScene(next){
   fadeEl.style.opacity='1';
   setTimeout(()=>{
     sceneIdx=next;
-    player.x=0; player.z=RD-1; player.facingX=0;
+    player.x=0; player.z=RD_NEAR-1; player.facingX=0;
     voidAlpha=0;
     portalTimer=0;
     assignPortals(next);
@@ -788,7 +794,7 @@ function loop(ts){
     }
   } else {
     player.x=Math.max(-RW+.5,Math.min(RW-.5,player.x));
-    player.z=Math.max(-RD+.5,Math.min(RD-.5,player.z));
+    player.z=Math.max(-RD+.5,Math.min(RD_NEAR-.5,player.z));
   }
 
   player.moving=mv?Math.min(1,player.moving+dt*6):Math.max(0,player.moving-dt*9);
