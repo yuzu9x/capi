@@ -326,11 +326,11 @@ function uploadBlob(phase,moveAmt,facingX){
 /* ════════════════════════════════════════════
    ROOM GEOMETRY
 ════════════════════════════════════════════ */
-const RW=4.5, RH=2.5, RD=6;
+const RW=2.0, RH=2.5, RD=18;
 const FLOOR_Y=-RH;
-const PORTAL_Z=-(RD-0.1);
+const PORTAL_Z=-(RD-0.2);
 const PORTAL_WORLD_R=0.85;
-const PRT_WR=0.80;
+const PRT_WR=0.70;
 
 function buildRoom(floorC,wallC,ceilC){
   const verts=[];
@@ -356,13 +356,12 @@ function buildRoom(floorC,wallC,ceilC){
 function fixedSlots(n){
   switch(n){
     case 1: return [0];
-    case 2: return [-2.2, 2.2];
-    case 3: return [-2.8, 0, 2.8];
+    case 2: return [-0.9, 0.9];
+    case 3: return [-1.2, 0, 1.2];
     default:{
-      // generic: evenly spaced, symmetric
       const slots=[];
-      const spread = Math.min(3.6, (RW-0.6)*2/(n-1)*((n-1)/2));
-      for(let i=0;i<n;i++) slots.push(-spread/2*(n-1)/((n-1)||1) + i*spread/Math.max(1,n-1));
+      const spread = (RW - 0.5) * 2;
+      for(let i=0;i<n;i++) slots.push(-spread/2 + i*(spread/Math.max(1,n-1)));
       return slots;
     }
   }
@@ -570,7 +569,7 @@ function fadeAudioOut(audio, durationMs, onComplete) {
    PLAYER & STATE
 ════════════════════════════════════════════ */
 let sceneIdx=0, gTime=0, trans=false;
-const player={x:0,z:1,facingX:0,moving:0,walkPhase:0};
+const player={x:0,z:RD-1,facingX:0,moving:0,walkPhase:0};
 const keys={};
 window.addEventListener('keydown',e=>{
   keys[e.key.toLowerCase()]=true;
@@ -579,9 +578,9 @@ window.addEventListener('keydown',e=>{
 window.addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
 
 function getVP(){
-  const proj=perspective(Math.PI/3.4,W/H,0.1,80);
-  const eye=[player.x,7.5,player.z+10];
-  const at=[player.x,0,player.z];
+  const proj=perspective(Math.PI/3.4,W/H,0.1,120);
+  const eye=[player.x,6.0,player.z+8];
+  const at=[player.x,0,player.z-4];
   return mul(proj,lookAt(eye,at));
 }
 
@@ -726,7 +725,7 @@ function goToScene(next){
   fadeEl.style.opacity='1';
   setTimeout(()=>{
     sceneIdx=next;
-    player.x=0; player.z=1; player.facingX=0;
+    player.x=0; player.z=RD-1; player.facingX=0;
     voidAlpha=0;
     assignPortals(next);
     const s=SCENES[sceneIdx];
