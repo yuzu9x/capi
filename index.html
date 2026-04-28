@@ -9,7 +9,7 @@
 
 <body>
 <div id="birth"></div>
-<div id="birth-label">CAPI</div>
+<div id="birth-label">YOU ARE: CAPI</div>
 <div id="birth-headphones">this is a sonic experience.<br>please wear headphones for the most optimal experience.</div>
 <canvas id="c"></canvas>
 <canvas id="overlay"></canvas>
@@ -500,15 +500,47 @@ function renderEndingOverlay(mvp, playerZ){
      tracks, so fast scene changes never leave
      a zombie interval writing to the wrong
      audio object.
+   — first W keypress unlocks audio on browsers
+     that block autoplay until user interaction.
 ════════════════════════════════════════════ */
 const MASTER_VOLUME = 1.0; // 0.0 – 1.0
 let currentAudio = null;
 let currentFadeInTimer = null;
+let audioUnlocked = false;
+
+function unlockAudio() {
+  if (audioUnlocked) return;
+  audioUnlocked = true;
+  // if there's already a track loaded but paused/silent, start it now
+  if (currentAudio && currentAudio.paused) {
+    currentAudio.play().then(() => doFadeInFor(currentAudio)).catch(()=>{});
+  }
+}
+
+// attach unlock to W key and any pointer interaction
+window.addEventListener('keydown', e => {
+  if (e.key.toLowerCase() === 'w' || e.key === 'ArrowUp') unlockAudio();
+}, { passive: true });
+window.addEventListener('pointerdown', unlockAudio, { passive: true });
+
+function doFadeInFor(audio) {
+  if (currentAudio !== audio) return;
+  if (currentFadeInTimer) { clearInterval(currentFadeInTimer); currentFadeInTimer = null; }
+  const steps = 40;
+  const iv = 2000 / steps;
+  let step = 0;
+  currentFadeInTimer = setInterval(() => {
+    if (currentAudio !== audio) {
+      clearInterval(currentFadeInTimer); currentFadeInTimer = null; return;
+    }
+    step++;
+    audio.volume = Math.min(MASTER_VOLUME, (step / steps) * MASTER_VOLUME);
+    if (step >= steps) { clearInterval(currentFadeInTimer); currentFadeInTimer = null; }
+  }, iv);
+}
 
 function playStageAudio(stageIdx) {
   const s = SCENES[stageIdx];
-  // scene 0 → stage%201/stage%201.mp3 … scene 24 → stage%2025/stage%2025.mp3
-  // ending void (index 25) reuses stage%2025.mp3
   const n = s.isEnding ? SCENES.length - 1 : stageIdx + 1;
   const src = `SOUNDS/stage%20${n}/stage%20${n}.mp3`;
   console.log(`[audio] loading: ${src}`);
@@ -535,32 +567,11 @@ function playStageAudio(stageIdx) {
   audio.volume = 0;
   currentAudio = audio;
 
-  const doFadeIn = () => {
-    if (currentAudio !== audio) return;
-    const steps = 40;
-    const iv = 2000 / steps;
-    let step = 0;
-    currentFadeInTimer = setInterval(() => {
-      if (currentAudio !== audio) {
-        clearInterval(currentFadeInTimer); currentFadeInTimer = null; return;
-      }
-      step++;
-      audio.volume = Math.min(MASTER_VOLUME, (step / steps) * MASTER_VOLUME);
-      if (step >= steps) { clearInterval(currentFadeInTimer); currentFadeInTimer = null; }
-    }, iv);
-  };
-
-  audio.play().then(doFadeIn).catch(() => {
-    // autoplay blocked — unlock on first user interaction
-    const unlock = () => {
-      if (currentAudio !== audio) return;
-      audio.play().then(doFadeIn);
-      window.removeEventListener('keydown', unlock);
-      window.removeEventListener('pointerdown', unlock);
-    };
-    window.addEventListener('keydown', unlock);
-    window.addEventListener('pointerdown', unlock);
-  });
+  if (audioUnlocked) {
+    // interaction already happened — play immediately
+    audio.play().then(() => doFadeInFor(audio)).catch(()=>{});
+  }
+  // if not yet unlocked, unlockAudio() will pick up currentAudio and start it
 }
 
 /* ════════════════════════════════════════════
