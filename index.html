@@ -10,6 +10,7 @@
 <body>
 <div id="birth"></div>
 <div id="birth-label">YOU ARE: CAPI</div>
+<div id="birth-headphones">this is a sonic experience.<br>please wear headphones for the most optimal experience.</div>
 <canvas id="c"></canvas>
 <canvas id="overlay"></canvas>
 <canvas id="title-canvas"></canvas>
@@ -26,6 +27,7 @@
 ════════════════════════════════════════════ */
 const birthEl    = document.getElementById('birth');
 const birthLabel = document.getElementById('birth-label');
+const birthHeadphones = document.getElementById('birth-headphones');
 const hintEl     = document.getElementById('hint');
 const heartbeatEl= document.getElementById('heartbeat');
 const dimOverlay = document.getElementById('dim-overlay');
@@ -41,7 +43,7 @@ hintEl.style.opacity = '0';
   function bResize(){ bw = bc.width = innerWidth; bh = bc.height = innerHeight; }
   window.addEventListener('resize', bResize); bResize();
   const startTime = performance.now();
-  const TOTAL = 4200;
+  const TOTAL = 12000;
   function drawBirth(ts){
     const t = Math.min((ts - startTime) / TOTAL, 1);
     bctx.clearRect(0,0,bw,bh);
@@ -62,16 +64,20 @@ hintEl.style.opacity = '0';
       sp.addColorStop(0,'rgba(255,255,255,.7)'); sp.addColorStop(1,'rgba(255,255,255,0)');
       bctx.fillStyle = sp; bctx.beginPath(); bctx.arc(cx-r*.3,cy-r*.3,r*.4,0,Math.PI*2); bctx.fill();
     }
-    if(t>.55){ const la = Math.min(1,(t-.55)/.3); birthLabel.style.color=`rgba(80,60,0,${la})`; }
+    if(t>.55){ const la = Math.min(1,(t-.55)/.3); birthLabel.style.color=`rgba(80,60,0,${la})`; birthHeadphones.style.color=`rgba(80,60,0,${la * 0.7})`; }
     if(t<1){ requestAnimationFrame(drawBirth); }
     else{
       setTimeout(()=>{
         birthEl.style.transition = 'opacity .9s'; birthEl.style.opacity = '0';
         birthLabel.style.transition = 'opacity .9s'; birthLabel.style.opacity = '0';
+        birthHeadphones.style.transition = 'opacity .9s'; birthHeadphones.style.opacity = '0';
         setTimeout(()=>{
-          birthEl.remove(); birthLabel.remove(); birthDone = true;
+          birthEl.remove(); birthLabel.remove(); birthHeadphones.remove(); birthDone = true;
           hintEl.style.transition = 'opacity 1s'; hintEl.style.opacity = '1';
           window.removeEventListener('resize', bResize);
+          // now safe to show — birth canvas is gone, title-canvas is visible
+          showTitle(SCENES[0].title, SCENES[0].titleCol);
+          playStageAudio(0);
         }, 900);
       }, 700);
     }
@@ -100,12 +106,13 @@ function renderTitleFrame(text, px, alpha, col){
   const TW = titleCanvas.width, TH = titleCanvas.height;
   tc.clearRect(0,0,TW,TH);
   if(alpha<=0||px<=0) return;
-  const fs = Math.min(TW*.09,110);
+  /* ── SMALLER FONT: cap at 52px, ~4.5% of viewport width ── */
+  const fs = Math.min(TW * 0.045, 52);
   offC.width = TW; offC.height = TH;
   off.clearRect(0,0,TW,TH);
   off.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
   off.font = `300 ${fs}px 'Courier New',monospace`;
-  off.letterSpacing = '0.35em';
+  off.letterSpacing = '0.25em';
   off.textAlign = 'center'; off.textBaseline = 'middle';
   off.fillText(text, TW/2, TH/2);
   if(px<=1){ tc.globalAlpha=alpha; tc.drawImage(offC,0,0); tc.globalAlpha=1; return; }
@@ -338,44 +345,42 @@ function buildRoom(floorC,wallC,ceilC){
 }
 
 /* ════════════════════════════════════════════
-   PORTAL RANDOMISATION
-   7 possible X slots along the back wall.
-   Each scene entry shuffles which slots get portals,
-   seeded on (sceneIdx + roomsVisited) so it changes
-   every visit but is deterministic per-run.
+   FIXED PORTAL POSITIONS
+   Portals are placed symmetrically across the back
+   wall based purely on count. No randomisation.
+   1 portal  → centre (x=0)
+   2 portals → ±2.2
+   3 portals → 0, ±2.8
+   4 portals → ±1.4, ±3.5 (clamped to room width)
 ════════════════════════════════════════════ */
-const SLOT_POOL=[-3.8,-2.6,-1.4,0,1.4,2.6,3.8];
-
-function makeLCG(seed){
-  let s=seed>>>0;
-  return function(){ s=(1664525*s+1013904223)>>>0; return s/4294967296; };
-}
-
-function randomSlots(n, seed){
-  const rng=makeLCG(seed);
-  const pool=[...SLOT_POOL];
-  for(let i=pool.length-1;i>0;i--){
-    const j=Math.floor(rng()*(i+1));
-    [pool[i],pool[j]]=[pool[j],pool[i]];
+function fixedSlots(n){
+  switch(n){
+    case 1: return [0];
+    case 2: return [-2.2, 2.2];
+    case 3: return [-2.8, 0, 2.8];
+    default:{
+      // generic: evenly spaced, symmetric
+      const slots=[];
+      const spread = Math.min(3.6, (RW-0.6)*2/(n-1)*((n-1)/2));
+      for(let i=0;i<n;i++) slots.push(-spread/2*(n-1)/((n-1)||1) + i*spread/Math.max(1,n-1));
+      return slots;
+    }
   }
-  return pool.slice(0,n);
 }
+
+let roomsVisited=0;
 
 /* ════════════════════════════════════════════
    30 SCENE BLUEPRINTS  (index 0-29 + ending at 30)
-   room: [floorRGB, wallRGB, ceilRGB]
-   portals: array of {label, col} — X assigned at entry
 ════════════════════════════════════════════ */
-let roomsVisited=0;
-
 const BLUEPRINTS=[
   /* 00 */ {title:'THE BEGINNING',         titleCol:[255,255,255], bg:[.05,.07,.14], room:[[.93,.14,.24],[.09,.10,.18],[.16,.15,.26]], portals:[{label:'ENTER THE LIGHT',col:[.92,.68,1.0]}]},
   /* 01 */ {title:'FIRST BREATH',          titleCol:[200,255,220], bg:[.03,.10,.07], room:[[.09,.18,.13],[.07,.13,.09],[.12,.20,.16]], portals:[{label:'INHALE',col:[.42,.98,.68]},{label:'EXHALE',col:[.78,.84,1.0]}]},
   /* 02 */ {title:'EARLY TERRITORY',       titleCol:[255,200,120], bg:[.14,.06,.03], room:[[.22,.12,.07],[.17,.08,.04],[.25,.14,.09]], portals:[{label:'A PACIFIER',col:[1.0,.70,.26]},{label:'A TOY',col:[.58,.38,1.0]},{label:'A SOUND',col:[.80,.60,.20]}]},
   /* 03 */ {title:'CHOOSE',                titleCol:[255,160,180], bg:[.12,.04,.09], room:[[.20,.07,.15],[.16,.05,.11],[.24,.09,.19]], portals:[{label:'MAMA',col:[1.0,.32,.52]},{label:'PAPA',col:[.32,.66,1.0]}]},
   /* 04 */ {title:'THE WEIGHT OF IT',      titleCol:[200,180,255], bg:[.08,.05,.18], room:[[.15,.10,.28],[.12,.08,.22],[.18,.12,.30]], portals:[{label:'REMEMBER',col:[.70,.50,1.0]},{label:'FORGET',col:[.40,.30,.80]},{label:'HOLD',col:[.90,.70,1.0]}]},
-  /* 05 */ {title:'A FALL',            titleCol:[255,220,180], bg:[.10,.08,.06], room:[[.18,.14,.10],[.14,.10,.07],[.20,.16,.12]], portals:[{label:'GET UP',col:[.90,.75,.40]},{label:'STAY DOWN',col:[.50,.40,.20]}]},
-  /* 06 */ {title:'THE BED WE MADE',    titleCol:[180,230,255], bg:[.04,.08,.14], room:[[.07,.11,.20],[.05,.09,.16],[.09,.13,.24]], portals:[{label:'YELLOW DOOR',col:[1.0,.90,.20]},{label:'BLUE WINDOW',col:[.20,.70,1.0]},{label:'WHITE WALL',col:[.90,.90,.90]}]},
+  /* 05 */ {title:'A FALL',                titleCol:[255,220,180], bg:[.10,.08,.06], room:[[.18,.14,.10],[.14,.10,.07],[.20,.16,.12]], portals:[{label:'GET UP',col:[.90,.75,.40]},{label:'STAY DOWN',col:[.50,.40,.20]}]},
+  /* 06 */ {title:'THE BED WE MADE',       titleCol:[180,230,255], bg:[.04,.08,.14], room:[[.07,.11,.20],[.05,.09,.16],[.09,.13,.24]], portals:[{label:'YELLOW DOOR',col:[1.0,.90,.20]},{label:'BLUE WINDOW',col:[.20,.70,1.0]},{label:'WHITE WALL',col:[.90,.90,.90]}]},
   /* 07 */ {title:'A NAME GIVEN',          titleCol:[255,240,200], bg:[.12,.10,.05], room:[[.20,.16,.08],[.16,.12,.06],[.24,.20,.10]], portals:[{label:'ACCEPT IT',col:[.95,.80,.30]},{label:'RESIST IT',col:[.70,.50,.10]}]},
   /* 08 */ {title:'LANGUAGE ARRIVES',      titleCol:[200,255,240], bg:[.03,.12,.10], room:[[.08,.18,.15],[.06,.14,.11],[.10,.22,.18]], portals:[{label:'WORD',col:[.30,.90,.70]},{label:'SILENCE',col:[.20,.60,.50]},{label:'CRY',col:[.80,.40,.40]}]},
   /* 09 */ {title:'THE MIRROR',            titleCol:[220,220,255], bg:[.06,.06,.16], room:[[.12,.12,.24],[.09,.09,.18],[.15,.15,.28]], portals:[{label:'LOOK CLOSER',col:[.70,.70,1.0]},{label:'LOOK AWAY',col:[.40,.40,.70]}]},
@@ -403,7 +408,7 @@ const BLUEPRINTS=[
   {title:'',titleCol:[255,255,255],bg:[0,0,0],room:[[.01,.01,.01],[.01,.01,.01],[.01,.01,.01]],portals:[],isEnding:true},
 ];
 
-const TOTAL_REGULAR = BLUEPRINTS.length - 1; // 30 regular stages
+const TOTAL_REGULAR = BLUEPRINTS.length - 1;
 
 /* ════════════════════════════════════════════
    BUILD SCENES
@@ -427,11 +432,8 @@ function assignPortals(sceneIdx){
   if(s.isEnding){ s.portals=[]; return; }
   const bp = BLUEPRINTS[sceneIdx];
   const n = bp.portals.length;
-  // next scene is always sceneIdx+1, ending at the void
   const nextIdx = sceneIdx < SCENES.length - 2 ? sceneIdx + 1 : SCENES.length - 1;
-  // seed changes each visit so layout shuffles
-  const seed = sceneIdx * 7919 + roomsVisited * 6271;
-  const slots = randomSlots(n, seed);
+  const slots = fixedSlots(n);
   s.portals = bp.portals.map((p,i)=>({
     label: p.label,
     col:   p.col,
@@ -504,6 +506,64 @@ function renderEndingOverlay(mvp, playerZ){
     oc.fillText(w.word.toUpperCase(),0,0);
     oc.restore();
   });
+}
+
+/* ════════════════════════════════════════════
+   AUDIO SYSTEM
+════════════════════════════════════════════ */
+let currentAudio = null;
+
+function playStageAudio(stageIdx) {
+  // stages are 1-indexed: SOUNDS/stage 1/stage 1.mp3
+  const n = stageIdx + 1;
+  const src = `SOUNDS/stage ${n}/stage ${n}.mp3`;
+
+  if (currentAudio) {
+    const prev = currentAudio;
+    fadeAudioOut(prev, 600, () => { prev.pause(); prev.src = ''; });
+  }
+
+  const audio = new Audio(src);
+  audio.loop = true;
+  audio.volume = 0;
+  currentAudio = audio;
+
+  audio.play().then(() => {
+    fadeAudioIn(audio, 1200);
+  }).catch(() => {
+    // autoplay blocked — resume on first user interaction
+    const unlock = () => {
+      if (currentAudio !== audio) return; // scene already changed
+      audio.play().then(() => fadeAudioIn(audio, 1200));
+      window.removeEventListener('keydown', unlock);
+      window.removeEventListener('pointerdown', unlock);
+    };
+    window.addEventListener('keydown', unlock);
+    window.addEventListener('pointerdown', unlock);
+  });
+}
+
+function fadeAudioIn(audio, durationMs) {
+  const steps = 30;
+  const interval = durationMs / steps;
+  let step = 0;
+  const timer = setInterval(() => {
+    step++;
+    audio.volume = Math.min(1.0, step / steps);
+    if (step >= steps) clearInterval(timer);
+  }, interval);
+}
+
+function fadeAudioOut(audio, durationMs, onComplete) {
+  const steps = 20;
+  const interval = durationMs / steps;
+  const startVol = audio.volume;
+  let step = 0;
+  const timer = setInterval(() => {
+    step++;
+    audio.volume = Math.max(0, startVol * (1 - step / steps));
+    if (step >= steps) { clearInterval(timer); if (onComplete) onComplete(); }
+  }, interval);
 }
 
 /* ════════════════════════════════════════════
@@ -634,7 +694,6 @@ function renderOverlay(s,mvp){
       oc.fillText('[ enter ]',sx,sy+50);
     }
   });
-  // room counter — subtle, bottom right
   oc.fillStyle='rgba(255,255,255,0.15)';
   oc.font='8px Courier New';
   oc.letterSpacing='0.2em';
@@ -674,15 +733,11 @@ function goToScene(next){
     setTimeout(()=>{
       fadeEl.style.opacity='0';
       if(s.title) showTitle(s.title, s.titleCol);
+      playStageAudio(sceneIdx);
       setTimeout(()=>{ trans=false; },(TITLE_IN_DUR+TITLE_HOLD_DUR)*1000);
     },400);
   },750);
 }
-
-/* ════════════════════════════════════════════
-   FIRST TITLE
-════════════════════════════════════════════ */
-showTitle(SCENES[0].title, SCENES[0].titleCol);
 
 /* ════════════════════════════════════════════
    MAIN LOOP
@@ -721,7 +776,6 @@ function loop(ts){
     voidAlpha=Math.max(0,Math.min(1,(player.z-voidStart)/(deepestWall-voidStart)));
     voidAlpha=voidAlpha*voidAlpha;
     if(player.z<=-(RD-0.6)&&!trans){
-      // full reset
       roomsVisited=0;
       capiScale=1.0;
       dimOverlay.style.opacity='0';
@@ -742,7 +796,6 @@ function loop(ts){
     });
   }
 
-  // ── render ──────────────────────────────
   gl.clearColor(s.bg[0],s.bg[1],s.bg[2],1);
   gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
   gl.enable(gl.DEPTH_TEST);
