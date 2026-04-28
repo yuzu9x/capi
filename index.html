@@ -511,6 +511,7 @@ function playStageAudio(stageIdx) {
   // ending void (index 25) reuses stage%2025.mp3
   const n = s.isEnding ? SCENES.length - 1 : stageIdx + 1;
   const src = `SOUNDS/stage%20${n}/stage%20${n}.mp3`;
+  console.log(`[audio] loading: ${src}`);
 
   // kill any active fade-in for the outgoing track
   if (currentFadeInTimer) { clearInterval(currentFadeInTimer); currentFadeInTimer = null; }
@@ -535,7 +536,7 @@ function playStageAudio(stageIdx) {
   currentAudio = audio;
 
   const doFadeIn = () => {
-    if (currentAudio !== audio) return; // scene changed before play resolved
+    if (currentAudio !== audio) return;
     const steps = 40;
     const iv = 2000 / steps;
     let step = 0;
